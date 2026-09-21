@@ -4,7 +4,7 @@ A mobile-first PWA for discovering independent and arthouse film showtimes in Va
 
 ## Project status
 
-Steps 1–3 are complete: system architecture, the initial PostgreSQL schema, source investigation, and typed extraction adapters with parser tests. Normalization, database writes, API routes, and frontend implementation have not started.
+The end-to-end MVP is implemented: source extraction, LLM-assisted title normalization, guarded TMDB matching, idempotent PostgreSQL persistence, browse APIs, and an installable mobile-first PWA.
 
 ## Planned stack
 
@@ -31,14 +31,22 @@ npm run typecheck
 npm run build
 ```
 
-The Step 3 worker is under `apps/worker`. Extractors return validated raw schedule records only; persistence and title normalization are intentionally deferred.
+The worker is under `apps/worker`; the Next.js PWA is under `apps/web`. Without `DATABASE_URL`, the UI uses clearly labelled demo listings so visual development still works.
+
+## Local setup
+
+```bash
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Apply `supabase/migrations/001_initial_schema.sql` followed by `002_normalization_pipeline.sql`. Set the server-only OpenAI, TMDB, and database credentials from `.env.example`. The title normalizer uses Structured Outputs; the matcher only persists a film when the top TMDB result clears both a score threshold and an ambiguity margin. Everything else stays in `raw_source_items` with `normalization_status = 'review'`.
 
 ## Delivery sequence
 
 1. System architecture and database schema — complete
 2. Hidden API hunt — complete
 3. Data extraction scripts — complete
-4. LLM normalization and TMDB merging
-5. API routes and PWA frontend
-
-Work does not advance between steps until the repository owner explicitly types `PROCEED`.
+4. LLM normalization and TMDB merging — complete
+5. API routes and PWA frontend — complete

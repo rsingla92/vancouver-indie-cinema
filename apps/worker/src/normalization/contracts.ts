@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+
 export const normalizedTitleSchema = z.object({
   coreTitle: z.string().min(1),
   releaseYear: z.number().int().min(1888).max(2200).nullable(),
@@ -9,7 +10,13 @@ export const normalizedTitleSchema = z.object({
   note: z.string().max(160),
 });
 
+
 export type NormalizedTitle = z.infer<typeof normalizedTitleSchema>;
+
+export interface TitleNormalizer {
+  normalize(rawTitle: string): NormalizedTitle;
+}
+
 
 export interface TmdbMovie {
   id: number;
@@ -22,6 +29,7 @@ export interface TmdbMovie {
   genre_ids: number[];
   popularity: number;
 }
+
 
 export interface RankedCandidate {
   movie: TmdbMovie;

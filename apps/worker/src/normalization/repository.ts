@@ -2,21 +2,25 @@ import postgres from "postgres";
 import type { ExtractedShowtime } from "../contracts.js";
 import type { NormalizedTitle, RankedCandidate } from "./contracts.js";
 
+
 export interface MergeInput {
   item: ExtractedShowtime;
   normalized: NormalizedTitle;
   candidate: RankedCandidate | null;
   payloadHash: string;
-  model: string;
+  rulesVersion: string;
 }
+
 
 export class CinemaRepository {
   private readonly sql: ReturnType<typeof postgres>;
+
 
   constructor(databaseUrl = process.env.DATABASE_URL) {
     if (!databaseUrl) throw new Error("DATABASE_URL is required");
     this.sql = postgres(databaseUrl, { max: 4 });
   }
+
 
   async merge(input: MergeInput): Promise<{ status: "matched" | "review"; movieId?: string }> {
     return this.sql.begin(async (sql) => {
@@ -26,12 +30,12 @@ export class CinemaRepository {
       const status = input.candidate ? "matched" : "review";
       const rawRows = await sql<{ id: string }[]>`
         insert into raw_source_items (theatre_id, source_uid, raw_title, source_url, payload, payload_hash,
-          normalized_title, normalized_year, normalization_confidence, normalization_model,
-          normalization_prompt_version, normalization_output, normalization_status, tmdb_candidate_id,
+          normalized_title, normalized_year, normalization_confidence, normalization_method,
+          normalization_rules_version, normalization_output, normalization_status, tmdb_candidate_id,
           match_confidence, match_reason, resolved_at)
         values (${theatre.id}, ${input.item.sourceUid}, ${input.item.rawTitle}, ${input.item.detailUrl},
           ${sql.json(JSON.parse(JSON.stringify(input.item.sourcePayload)))}, ${input.payloadHash}, ${input.normalized.coreTitle},
-          ${input.normalized.releaseYear}, ${input.normalized.confidence}, ${input.model}, 'title-v1',
+          ${input.normalized.releaseYear}, ${input.normalized.confidence}, 'deterministic', ${input.rulesVersion},
           ${sql.json(input.normalized)}, ${status}, ${input.candidate?.movie.id ?? null},
           ${input.candidate?.score ?? null}, ${input.candidate?.reason ?? 'No candidate cleared the confidence and ambiguity thresholds'},
           ${input.candidate ? sql`now()` : null})
@@ -44,6 +48,7 @@ export class CinemaRepository {
         returning id`;
       const raw = rawRows[0]!;
       if (!input.candidate) return { status: "review" as const };
+
 
       const movie = input.candidate.movie;
       const releaseYear = movie.release_date ? Number(movie.release_date.slice(0, 4)) : input.normalized.releaseYear;
@@ -79,6 +84,7 @@ export class CinemaRepository {
       return { status: "matched" as const, movieId: movieRow.id };
     });
   }
+
 
   async close(): Promise<void> { await this.sql.end(); }
 }

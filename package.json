@@ -1,0 +1,11 @@
+{
+  "name": "vancouver-indie-cinema",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "npm run build --workspace=@vic/worker",
+    "test": "npm run test --workspace=@vic/worker",
+    "typecheck": "npm run typecheck --workspace=@vic/worker"
+  },
+  "engines": { "node": ">=22" }
+}

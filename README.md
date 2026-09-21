@@ -4,7 +4,7 @@ A mobile-first PWA for discovering independent and arthouse film showtimes in Va
 
 ## Project status
 
-Steps 1 and 2 are complete: system architecture, the initial PostgreSQL schema, and a read-only source investigation. No extraction, normalization integration, or frontend implementation has been started.
+Steps 1–3 are complete: system architecture, the initial PostgreSQL schema, source investigation, and typed extraction adapters with parser tests. Normalization, database writes, API routes, and frontend implementation have not started.
 
 ## Planned stack
 
@@ -22,11 +22,22 @@ Steps 1 and 2 are complete: system architecture, the initial PostgreSQL schema, 
 - [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md): observed source architectures and a reproducible Network-tab capture protocol
 - [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql): initial relational schema, constraints, and indexes
 
+## Worker verification
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run build
+```
+
+The Step 3 worker is under `apps/worker`. Extractors return validated raw schedule records only; persistence and title normalization are intentionally deferred.
+
 ## Delivery sequence
 
 1. System architecture and database schema — complete
 2. Hidden API hunt — complete
-3. Data extraction scripts
+3. Data extraction scripts — complete
 4. LLM normalization and TMDB merging
 5. API routes and PWA frontend
 

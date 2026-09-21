@@ -1,25 +1,20 @@
 import type { NormalizedTitle, RankedCandidate, TmdbMovie } from "./contracts.js";
+import { fuzzy } from "fast-fuzzy";
+
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+
 
 function canonical(value: string): string {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function bigrams(value: string): Set<string> {
-  const compact = ` ${canonical(value)} `;
-  return new Set(Array.from({ length: Math.max(0, compact.length - 1) }, (_, index) => compact.slice(index, index + 2)));
-}
 
 export function titleSimilarity(a: string, b: string): number {
   if (canonical(a) === canonical(b)) return 1;
-  const left = bigrams(a);
-  const right = bigrams(b);
-  if (!left.size || !right.size) return 0;
-  let overlap = 0;
-  for (const pair of left) if (right.has(pair)) overlap += 1;
-  return (2 * overlap) / (left.size + right.size);
+  return fuzzy(canonical(a), canonical(b), { useSellers: true });
 }
+
 
 export function rankCandidates(input: NormalizedTitle, movies: TmdbMovie[]): RankedCandidate[] {
   return movies.map((movie) => {
@@ -32,6 +27,7 @@ export function rankCandidates(input: NormalizedTitle, movies: TmdbMovie[]): Ran
   }).sort((a, b) => b.score - a.score);
 }
 
+
 export function confidentMatch(ranked: RankedCandidate[]): RankedCandidate | null {
   const [first, second] = ranked;
   if (!first || first.score < 0.82) return null;
@@ -39,8 +35,10 @@ export function confidentMatch(ranked: RankedCandidate[]): RankedCandidate | nul
   return first;
 }
 
+
 export class TmdbClient {
   constructor(private readonly token = process.env.TMDB_API_TOKEN) {}
+
 
   async search(input: NormalizedTitle): Promise<TmdbMovie[]> {
     if (!this.token) throw new Error("TMDB_API_TOKEN is required");

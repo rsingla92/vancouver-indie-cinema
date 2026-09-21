@@ -1,12 +1,15 @@
 begin;
 
+
 create extension if not exists pgcrypto;
+
 
 create type public.source_kind as enum ('hidden_api', 'json_ld', 'ical', 'dom');
 create type public.ingestion_status as enum ('running', 'succeeded', 'partial', 'failed');
 create type public.showtime_status as enum ('scheduled', 'sold_out', 'cancelled', 'completed');
 create type public.showtime_kind as enum ('film', 'special_event');
 create type public.tag_category as enum ('format', 'experience', 'accessibility', 'restriction');
+
 
 create table public.theatres (
   id uuid primary key default gen_random_uuid(),
@@ -32,6 +35,7 @@ create table public.theatres (
   check ((latitude is null and longitude is null) or (latitude is not null and longitude is not null))
 );
 
+
 create table public.movies (
   id uuid primary key default gen_random_uuid(),
   tmdb_id bigint,
@@ -50,9 +54,11 @@ create table public.movies (
   updated_at timestamptz not null default now()
 );
 
+
 create unique index movies_tmdb_id_unique
   on public.movies (tmdb_id)
   where tmdb_id is not null;
+
 
 create table public.ingestion_runs (
   id uuid primary key default gen_random_uuid(),
@@ -68,6 +74,7 @@ create table public.ingestion_runs (
   check (finished_at is null or finished_at >= started_at)
 );
 
+
 create table public.raw_source_items (
   id uuid primary key default gen_random_uuid(),
   theatre_id uuid not null references public.theatres(id) on delete cascade,
@@ -80,13 +87,14 @@ create table public.raw_source_items (
   normalized_title text,
   normalized_year smallint check (normalized_year between 1888 and 2200),
   normalization_confidence numeric(4,3) check (normalization_confidence between 0 and 1),
-  normalization_model text,
-  normalization_prompt_version text,
+  normalization_method text,
+  normalization_rules_version text,
   normalization_output jsonb,
   fetched_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   unique (theatre_id, source_uid, payload_hash)
 );
+
 
 create table public.showtimes (
   id uuid primary key default gen_random_uuid(),
@@ -111,6 +119,7 @@ create table public.showtimes (
   check (kind <> 'film' or movie_id is not null)
 );
 
+
 create table public.tags (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
@@ -118,51 +127,3 @@ create table public.tags (
   category public.tag_category not null,
   description text,
   created_at timestamptz not null default now()
-);
-
-create table public.showtime_tags (
-  showtime_id uuid not null references public.showtimes(id) on delete cascade,
-  tag_id uuid not null references public.tags(id) on delete cascade,
-  source_text text,
-  created_at timestamptz not null default now(),
-  primary key (showtime_id, tag_id)
-);
-
-create index showtimes_browse_idx
-  on public.showtimes (starts_at, theatre_id)
-  where is_active and status in ('scheduled', 'sold_out');
-create index showtimes_movie_starts_idx on public.showtimes (movie_id, starts_at);
-create index raw_source_items_lookup_idx on public.raw_source_items (theatre_id, source_uid, fetched_at desc);
-create index ingestion_runs_theatre_started_idx on public.ingestion_runs (theatre_id, started_at desc);
-
-create function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-create trigger theatres_set_updated_at
-before update on public.theatres
-for each row execute function public.set_updated_at();
-
-create trigger movies_set_updated_at
-before update on public.movies
-for each row execute function public.set_updated_at();
-
-create trigger showtimes_set_updated_at
-before update on public.showtimes
-for each row execute function public.set_updated_at();
-
-alter table public.theatres enable row level security;
-alter table public.movies enable row level security;
-alter table public.ingestion_runs enable row level security;
-alter table public.raw_source_items enable row level security;
-alter table public.showtimes enable row level security;
-alter table public.tags enable row level security;
-alter table public.showtime_tags enable row level security;
-
-commit;

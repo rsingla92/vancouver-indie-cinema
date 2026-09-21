@@ -4,7 +4,7 @@ A mobile-first PWA for discovering independent and arthouse film showtimes in Va
 
 ## Project status
 
-Step 1 is complete: system architecture and the initial PostgreSQL schema. No theatre extraction, hidden-API inspection, normalization integration, or frontend implementation has been started.
+Steps 1 and 2 are complete: system architecture, the initial PostgreSQL schema, and a read-only source investigation. No extraction, normalization integration, or frontend implementation has been started.
 
 ## Planned stack
 
@@ -19,12 +19,13 @@ Step 1 is complete: system architecture and the initial PostgreSQL schema. No th
 ## Step 1 artifacts
 
 - [`docs/architecture.md`](docs/architecture.md): boundaries, data flow, folder structure, and design decisions
+- [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md): observed source architectures and a reproducible Network-tab capture protocol
 - [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql): initial relational schema, constraints, and indexes
 
 ## Delivery sequence
 
 1. System architecture and database schema — complete
-2. Hidden API hunt — awaiting explicit approval
+2. Hidden API hunt — complete
 3. Data extraction scripts
 4. LLM normalization and TMDB merging
 5. API routes and PWA frontend

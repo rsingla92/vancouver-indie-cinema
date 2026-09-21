@@ -9,9 +9,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ctrl/video-filename-parser": "^5.11.4",
     "cheerio": "^1.1.2",
+    "fast-fuzzy": "^1.12.0",
     "luxon": "^3.7.2",
-    "openai": "^6.16.0",
     "postgres": "^3.4.7",
     "zod": "^4.1.11"
   },

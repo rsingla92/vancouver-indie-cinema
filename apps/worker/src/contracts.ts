@@ -20,10 +20,11 @@ export const extractedShowtimeSchema = z.object({
   sourcePayload: z.record(z.string(), z.unknown()),
 });
 
+export type VenueSlug = z.infer<typeof venueSlugSchema>;
 export type ExtractedShowtime = z.infer<typeof extractedShowtimeSchema>;
 
 export interface ExtractionBatch {
-  venueSlug: z.infer<typeof venueSlugSchema>;
+  venueSlug: VenueSlug;
   fetchedAt: string;
   showtimes: ExtractedShowtime[];
   warnings: string[];

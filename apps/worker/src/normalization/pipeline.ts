@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import type { ExtractedShowtime } from "../contracts.js";
 import type { TitleNormalizer } from "./contracts.js";
 import { DeterministicTitleNormalizer, NORMALIZATION_RULES_VERSION } from "./normalizer.js";
-import { CinemaRepository } from "./repository.js";
+import { CinemaRepository, type MergeResult } from "./repository.js";
 import { confidentMatch, rankCandidates, TmdbClient } from "./tmdb.js";
 
+/** Normalizations below this confidence are never auto-matched against TMDB. */
+export const MIN_NORMALIZATION_CONFIDENCE = 0.7;
 
 export interface PipelineDependencies {
   normalizer: TitleNormalizer;
@@ -13,21 +15,57 @@ export interface PipelineDependencies {
   rulesVersion: string;
 }
 
+export interface ProcessContext {
+  ingestionRunId?: string;
+}
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * Hash of everything the extractor observed for a showtime, independent of key
+ * order at any depth. A changed title, time, status or ticket link yields a new
+ * hash and therefore a new raw_source_items revision.
+ */
 export function stablePayloadHash(item: ExtractedShowtime): string {
-  const ordered = JSON.stringify(item.sourcePayload, Object.keys(item.sourcePayload).sort());
-  return createHash("sha256").update(ordered).digest("hex");
+  const { venueSlug: _venueSlug, sourceUid: _sourceUid, ...observed } = item;
+  return createHash("sha256").update(stableStringify(observed)).digest("hex");
 }
 
-
-export async function processShowtime(item: ExtractedShowtime, dependencies: PipelineDependencies) {
+export async function processShowtime(
+  item: ExtractedShowtime,
+  dependencies: PipelineDependencies,
+  context: ProcessContext = {},
+): Promise<MergeResult> {
   const normalized = dependencies.normalizer.normalize(item.rawTitle);
-  const candidates = normalized.contentKind === "film" ? await dependencies.tmdb.search(normalized) : [];
-  const candidate = normalized.confidence >= 0.7 ? confidentMatch(rankCandidates(normalized, candidates)) : null;
-  return dependencies.repository.merge({ item, normalized, candidate, payloadHash: stablePayloadHash(item), rulesVersion: dependencies.rulesVersion });
-}
+  const eligible = normalized.contentKind === "film" && normalized.confidence >= MIN_NORMALIZATION_CONFIDENCE;
+  const candidate = eligible ? confidentMatch(rankCandidates(normalized, await dependencies.tmdb.search(normalized))) : null;
 
+  return dependencies.repository.merge({
+    item,
+    normalized,
+    candidate,
+    payloadHash: stablePayloadHash(item),
+    rulesVersion: dependencies.rulesVersion,
+    ...(context.ingestionRunId ? { ingestionRunId: context.ingestionRunId } : {}),
+  });
+}
 
 export function createDefaultPipeline() {
-  return { normalizer: new DeterministicTitleNormalizer(), tmdb: new TmdbClient(), repository: new CinemaRepository(), rulesVersion: NORMALIZATION_RULES_VERSION };
+  return {
+    normalizer: new DeterministicTitleNormalizer(),
+    tmdb: new TmdbClient(),
+    repository: new CinemaRepository(),
+    rulesVersion: NORMALIZATION_RULES_VERSION,
+  };
 }

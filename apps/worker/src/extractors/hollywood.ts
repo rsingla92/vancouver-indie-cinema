@@ -26,7 +26,8 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Extracte
   const dateMatch = description.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i);
   if (!rawTitle || !dateMatch) return [];
 
-  const bodyText = cleanText($("body").text());
+  // Join text nodes with spaces so adjacent elements never fuse into one word.
+  const bodyText = cleanText($("body *").contents().filter((_, node) => node.type === "text").map((_, node) => $(node).text()).get().join(" "));
   const showTimes = [...bodyText.matchAll(/\bSHOW\s*:\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi)]
     .map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
   const uniqueTimes = [...new Set(showTimes)];
@@ -45,7 +46,7 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Extracte
       startsAt: iso(startsAt),
       detailUrl: pageUrl,
       ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
-      tags: categories,
+      tags: categories.filter((category) => category !== "film"),
       sourcePayload: { description, categories, showTimeText: time },
     });
   });

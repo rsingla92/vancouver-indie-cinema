@@ -66,8 +66,8 @@ export async function extractViff(maxPages = 20): Promise<ExtractionBatch> {
     const html = await fetchText(url);
     const parsed = parseViffPage(html, url.toString());
     showtimes.push(...parsed);
-    if (!html.includes(`/whats-on/page/${page + 1}/`)) break;
     if (parsed.length === 0) warnings.push(`${url}: no showtimes parsed`);
+    if (!html.includes(`/whats-on/page/${page + 1}/`)) break;
   }
 
   return { venueSlug: "viff-centre", fetchedAt: new Date().toISOString(), showtimes, warnings };

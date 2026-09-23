@@ -25,16 +25,18 @@ function ymd(date: Date): string {
 
 export function parseRioPayload(payload: unknown): ExtractedShowtime[] {
   return rioPayloadSchema.parse(payload).map((row) => {
-    const endIsUseful = row.end_time && row.end_time !== row.start_time;
+    // Barker repeats the start time as the end time when no duration is known.
+    const endsAt = row.end_time && Date.parse(row.end_time) > Date.parse(row.start_time) ? row.end_time : undefined;
+    const extra = row.extra.replace(/\s+/g, " ").trim();
     return extractedShowtimeSchema.parse({
       venueSlug: "rio-theatre",
       sourceUid: String(row.id),
-      rawTitle: row.event.title,
+      rawTitle: row.event.title.trim(),
       startsAt: row.start_time,
-      ...(endIsUseful ? { endsAt: row.end_time } : {}),
+      ...(endsAt ? { endsAt } : {}),
       detailUrl: row.event.link,
       ...(row.tickets_link ? { ticketUrl: row.tickets_link } : {}),
-      tags: [row.premiere ? "premiere" : "", row.extra].filter(Boolean),
+      tags: [row.premiere ? "premiere" : "", extra].filter(Boolean),
       sourcePayload: row,
     });
   });

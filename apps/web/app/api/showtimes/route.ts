@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getShowtimes } from "@/lib/data";
+import { clampDays, getShowtimes } from "@/lib/data";
+import { VANCOUVER_TZ } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const rawDays = Number(request.nextUrl.searchParams.get("days") ?? 7);
-  const days = Math.min(14, Math.max(1, Number.isFinite(rawDays) ? rawDays : 7));
-  const { data, demo } = await getShowtimes(days);
-  return NextResponse.json({ data, meta: { days, demo, generatedAt: new Date().toISOString() } });
+  const days = clampDays(request.nextUrl.searchParams.get("days"));
+  const { data, demo, generatedAt } = await getShowtimes(days);
+  return NextResponse.json(
+    { data, meta: { days, timezone: VANCOUVER_TZ, demo, generatedAt } },
+    { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600" } },
+  );
 }

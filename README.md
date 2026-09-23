@@ -4,7 +4,7 @@ A mobile-first PWA for discovering independent and arthouse film showtimes in Va
 
 ## Project status
 
-The end-to-end MVP includes source extraction, deterministic title normalization, guarded TMDB matching, idempotent PostgreSQL persistence, browse APIs, and an installable mobile-first PWA. It has no LLM or generative-AI runtime dependency.
+The end-to-end MVP includes source extraction, deterministic title normalization, guarded TMDB matching, idempotent PostgreSQL persistence with per-run reconciliation, browse APIs, and an installable mobile-first PWA. It has no LLM or generative-AI runtime dependency.
 
 ## Stack
 
@@ -12,7 +12,7 @@ The end-to-end MVP includes source extraction, deterministic title normalization
 - Supabase PostgreSQL
 - Node.js ingestion worker
 - TMDB for canonical movie metadata
-- `@ctrl/video-filename-parser` for Radarr-style title/year parsing
+- `@ctrl/video-filename-parser` as a guarded final pass for release-style suffixes
 - `fast-fuzzy` for deterministic title similarity
 - Web App Manifest and service worker for installability and offline schedule access
 
@@ -22,6 +22,7 @@ The end-to-end MVP includes source extraction, deterministic title normalization
 - [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md): source investigation and Network-tab capture protocol
 - [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql): relational schema
 - [`supabase/migrations/002_normalization_pipeline.sql`](supabase/migrations/002_normalization_pipeline.sql): match-review state and read policies
+- [`supabase/migrations/003_seed_theatres.sql`](supabase/migrations/003_seed_theatres.sql): the four venues the worker ingests
 
 ## Local setup
 
@@ -33,7 +34,25 @@ npm run dev
 
 Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses labelled demo listings for visual development.
 
-Apply the two SQL migrations in order. The normalizer removes known venue prefixes and format/event labels, parses the remaining title and explicit year, then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
+Apply the three SQL migrations in order. The seed migration is idempotent and must run before the worker, which resolves each venue by slug.
+
+## Ingestion
+
+```bash
+npm run ingest                                    # every venue, 60-day horizon
+npm run ingest -- --days=30 --venues=rio-theatre  # narrower run
+```
+
+For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. Venue slugs are `rio-theatre`, `the-cinematheque`, `viff-centre`, and `hollywood-theatre`.
+
+The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
+
+## Read API
+
+- `GET /api/showtimes?days=7`: upcoming showtimes through the end of the Nth Vancouver calendar day (1–14, default 7)
+- `GET /api/movies/today`: the rest of today in Vancouver time
+
+Both return `{ data, meta }` where `meta.generatedAt` is the snapshot time and `meta.demo` flags preview data.
 
 ## Verification
 
@@ -50,3 +69,4 @@ npm run build
 3. Data extraction scripts — complete
 4. Deterministic normalization and TMDB merging — complete
 5. API routes and PWA frontend — complete
+6. Scheduled ingestion job with run history and reconciliation — complete

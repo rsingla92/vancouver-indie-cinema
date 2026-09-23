@@ -127,3 +127,57 @@ create table public.tags (
   category public.tag_category not null,
   description text,
   created_at timestamptz not null default now()
+);
+
+
+create table public.showtime_tags (
+  showtime_id uuid not null references public.showtimes(id) on delete cascade,
+  tag_id uuid not null references public.tags(id) on delete cascade,
+  source_text text,
+  created_at timestamptz not null default now(),
+  primary key (showtime_id, tag_id)
+);
+
+
+create index showtimes_browse_idx
+  on public.showtimes (starts_at, theatre_id)
+  where is_active and status in ('scheduled', 'sold_out');
+create index showtimes_movie_starts_idx on public.showtimes (movie_id, starts_at);
+create index raw_source_items_lookup_idx on public.raw_source_items (theatre_id, source_uid, fetched_at desc);
+create index ingestion_runs_theatre_started_idx on public.ingestion_runs (theatre_id, started_at desc);
+
+
+create function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+
+create trigger theatres_set_updated_at
+before update on public.theatres
+for each row execute function public.set_updated_at();
+
+create trigger movies_set_updated_at
+before update on public.movies
+for each row execute function public.set_updated_at();
+
+create trigger showtimes_set_updated_at
+before update on public.showtimes
+for each row execute function public.set_updated_at();
+
+
+alter table public.theatres enable row level security;
+alter table public.movies enable row level security;
+alter table public.ingestion_runs enable row level security;
+alter table public.raw_source_items enable row level security;
+alter table public.showtimes enable row level security;
+alter table public.tags enable row level security;
+alter table public.showtime_tags enable row level security;
+
+
+commit;

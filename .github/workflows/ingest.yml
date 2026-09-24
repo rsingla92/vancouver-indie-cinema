@@ -1,0 +1,57 @@
+name: Ingest showtimes
+
+# Runs once a day at 9:00 a.m. in Vancouver. GitHub schedules are UTC only, so
+# both possible UTC offsets are scheduled and the job checks the local hour.
+on:
+  schedule:
+    - cron: "0 16 * * *" # 9:00 a.m. PDT
+    - cron: "0 17 * * *" # 9:00 a.m. PST
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days ahead to fetch"
+        default: "60"
+      venues:
+        description: "Comma-separated venue slugs (empty = all)"
+        default: ""
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  clock:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        run: |
+          hour=$(TZ=America/Vancouver date +%H)
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "$hour" = "09" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping: it is ${hour}:00 in Vancouver, not 09:00."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  ingest:
+    needs: clock
+    if: needs.clock.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TMDB_API_TOKEN: ${{ secrets.TMDB_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run ingestion
+        run: |
+          args="--days=${{ inputs.days || '60' }}"
+          if [ -n "${{ inputs.venues }}" ]; then args="$args --venues=${{ inputs.venues }}"; fi
+          npm run ingest -- $args

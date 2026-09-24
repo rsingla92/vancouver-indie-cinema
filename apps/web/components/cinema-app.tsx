@@ -81,22 +81,22 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
 
   const featured = movies[0];
   const featuredTonight = featured ? vancouverDateKey(featured.startsAt) === vancouverDateKey(generatedAt) : false;
-  const ticker = initialShowtimes.slice(0, TICKER_LIMIT).map((item) => `${formatClock(item.startsAt)} ${item.title} — ${item.theatre.name}`).join("  ★  ");
+  const ticker = initialShowtimes.slice(0, TICKER_LIMIT).map((item) => `${formatClock(item.startsAt)} ${item.title} at ${item.theatre.name}`).join("   |   ");
 
   return <div className="zine">
-    {ticker && <div className="ticker" aria-hidden="true"><div className="ticker-track">★  {ticker}  ★</div></div>}
+    {ticker && <div className="ticker" aria-hidden="true"><div className="ticker-track">{ticker}</div></div>}
 
     <header className="masthead">
       <div className="dateline"><span>Vancouver, B.C.</span><span>{formatLongDay(generatedAt)}</span><span>Updated {formatClock(generatedAt)}</span></div>
       <a className="brand" href="#top" aria-label="IndieScreen home"><span>Indie</span>Screen</a>
-      <p className="tagline">Independent &amp; repertory cinema listings{theatres.length > 0 ? ` — ${theatres.map((item) => item.name).join(" · ")}` : ""}</p>
+      <p className="tagline">{theatres.length > 0 ? theatres.map((item) => item.name).join(" · ") : "Independent cinema showtimes"}</p>
       <nav className="menu" aria-label="Primary navigation">
         {NAV.map(({ id, href, label }) => <a key={id} href={href} className={tab === id ? "current" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>[ {label} ]</a>)}
       </nav>
       <form className="searchbox" role="search" onSubmit={(event) => event.preventDefault()}>
-        <label htmlFor="film-search">Find a film or cinema</label>
+        <label htmlFor="film-search">Search</label>
         <div className="searchbox-row">
-          <input id="film-search" type="search" value={query} placeholder="e.g. Chungking Express" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setQuery(""); }} />
+          <input id="film-search" type="search" value={query} placeholder="Film or cinema" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setQuery(""); }} />
           <button type="submit">Go</button>
           {searching && <button type="button" className="textlink" onClick={() => setQuery("")}>clear</button>}
         </div>
@@ -117,13 +117,13 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
               {featured.year && <div><dt>Year</dt><dd>{featured.year}</dd></div>}
             </dl>
             <a className="cta" href={featured.ticketUrl} target="_blank" rel="noreferrer">
-              {featured.status === "sold_out" ? "Sold out — check with the cinema" : `Get tickets at ${featured.theatre.name}`} →
+              {featured.status === "sold_out" ? "Sold out" : `Buy tickets at ${featured.theatre.name}`}
             </a>
           </div>
         </> : <>
           <div className="tonight-label"><Stamp>Vancouver</Stamp></div>
-          <h1 id="tonight-title">Nothing on the marquee</h1>
-          <p className="blurb">{searching ? "No films match your search." : "No upcoming screenings were found. Check back soon."}</p>
+          <h1 id="tonight-title">No films found</h1>
+          <p className="blurb">{searching ? "Nothing matches your search." : "No upcoming screenings."}</p>
         </>}
       </section>
 
@@ -134,16 +134,16 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
           <button type="button" className={venue === "all" ? "textlink current" : "textlink"} aria-pressed={venue === "all"} onClick={() => setVenue("all")}>All</button>
           {theatres.map((item) => <button type="button" key={item.slug} className={venue === item.slug ? "textlink current" : "textlink"} aria-pressed={venue === item.slug} onClick={() => setVenue(item.slug)}>{item.name}</button>)}
         </div>
-        {demo && <p className="notice"><b>Preview.</b> These are sample listings — connect a database to publish the live schedule.</p>}
+        {demo && <p className="notice"><b>Sample listings.</b> Set DATABASE_URL to show the live schedule.</p>}
         {movies.length > 0 ? <div className="flyers">{movies.map((movie) => {
           const isSaved = saved.includes(movie.movieId);
           return <article className="flyer" key={movie.movieId}>
             <div className="flyer-poster"><Poster movie={movie} />{movie.tags[0] && <Stamp>{movie.tags[0]}</Stamp>}</div>
             <h3>{movie.title}</h3>
             <p className="flyer-meta">{movie.year ? `${movie.year} · ` : ""}{movie.theatre.name}</p>
-            <button type="button" className="textlink" aria-pressed={isSaved} aria-label={isSaved ? `Remove ${movie.title} from watchlist` : `Save ${movie.title} to watchlist`} onClick={() => toggleSaved(movie.movieId)}>{isSaved ? "[ ♥ saved ]" : "[ ♡ save ]"}</button>
+            <button type="button" className="textlink" aria-pressed={isSaved} aria-label={isSaved ? `Remove ${movie.title} from saved` : `Save ${movie.title} `} onClick={() => toggleSaved(movie.movieId)}>{isSaved ? "[ saved ]" : "[ save ]"}</button>
           </article>;
-        })}</div> : <p className="empty">No films match. Try another cinema or clear your search.</p>}
+        })}</div> : <p className="empty">No films match.</p>}
 
         <h2 className="rule-heading"><span>Showtimes</span><small>{visible.length} {visible.length === 1 ? "screening" : "screenings"}</small></h2>
         {visible.length > 0 ? <ol className="rows">{visible.map((item) => <li className="row" key={item.id}>
@@ -157,19 +157,18 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
       </section>
 
       <section className="watchlist" id="saved">
-        <h2 className="rule-heading"><span>My watchlist</span><small>{savedMovies.length} saved</small></h2>
+        <h2 className="rule-heading"><span>Saved</span><small>{savedMovies.length} saved</small></h2>
         {savedMovies.length > 0 ? <ol className="rows">{savedMovies.map((movie) => <li className="row" key={movie.movieId}>
           <div className="row-when"><b>{formatClock(movie.startsAt)}</b><span>{formatDay(movie.startsAt)}</span></div>
           <div className="row-what"><h3>{movie.title}</h3><p>{movie.theatre.name}</p></div>
-          <button type="button" className="textlink" aria-label={`Remove ${movie.title} from watchlist`} onClick={() => toggleSaved(movie.movieId)}>[ remove ]</button>
-        </li>)}</ol> : <p className="empty">Nothing saved yet. Hit “save” under a poster and it will be kept on this device.</p>}
+          <button type="button" className="textlink" aria-label={`Remove ${movie.title} from saved`} onClick={() => toggleSaved(movie.movieId)}>[ remove ]</button>
+        </li>)}</ol> : <p className="empty">Nothing saved. Saved films are kept in this browser.</p>}
       </section>
     </main>
 
     <footer className="colophon">
-      <p className="mono" aria-hidden="true">~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~</p>
-      <p>Tickets are sold by each cinema on its own site. Listings refreshed {formatDay(generatedAt)} at {formatClock(generatedAt)}.</p>
-      <p>Made by hand in Vancouver, B.C. · Best viewed in any browser.</p>
+      <p>Tickets are sold by each cinema. Listings updated {formatDay(generatedAt)}, {formatClock(generatedAt)}.</p>
+      <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
     </footer>
   </div>;
 }

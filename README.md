@@ -47,6 +47,13 @@ For each venue the job records an `ingestion_runs` row, fetches the schedule, no
 
 The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
 
+## Automation
+
+- `.github/workflows/ci.yml` runs typecheck, tests and the build on every push to `main` and every pull request.
+- `.github/workflows/ingest.yml` runs the ingestion job once a day at 9:00 a.m. Vancouver time. GitHub schedules in UTC, so the workflow is scheduled at both 16:00 and 17:00 UTC and skips the run that is not 9 a.m. locally. It can also be started by hand from the Actions tab with a custom horizon or venue list.
+
+The ingest workflow needs two repository secrets: `DATABASE_URL` and `TMDB_API_TOKEN`.
+
 ## Read API
 
 - `GET /api/showtimes?days=7`: upcoming showtimes through the end of the Nth Vancouver calendar day (1–14, default 7)

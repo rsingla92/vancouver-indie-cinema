@@ -94,4 +94,4 @@ The service worker should precache the application shell and use stale-while-rev
 
 ## Deliberately deferred
 
-This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`; CI, scheduled invocation of the worker, and deployment remain to be set up.
+This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`. CI and the daily ingestion schedule live in `.github/workflows/`. Deployment of the web app remains to be set up.

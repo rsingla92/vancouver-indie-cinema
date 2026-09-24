@@ -1,6 +1,7 @@
+import { VANCOUVER_TZ } from "./format";
 import type { ShowtimeView } from "./types";
 
-export const VANCOUVER_TZ = "America/Vancouver";
+export { VANCOUVER_TZ };
 
 const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: VANCOUVER_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 const wallClockParts = new Intl.DateTimeFormat("en-CA", {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clampDays, getShowtimes } from "@/lib/data";
-import { VANCOUVER_TZ } from "@/lib/demo-data";
+import { VANCOUVER_TZ } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 

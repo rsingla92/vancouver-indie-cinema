@@ -1,5 +1,6 @@
 import postgres from "postgres";
-import { getDemoShowtimes, VANCOUVER_TZ } from "./demo-data";
+import { getDemoShowtimes } from "./demo-data";
+import { VANCOUVER_TZ } from "./format";
 import type { ShowtimeView } from "./types";
 
 export const DEFAULT_DAYS = 7;

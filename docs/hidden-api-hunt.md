@@ -25,6 +25,7 @@ Reject analytics, ad, newsletter, CAPTCHA, and payment calls. A schedule source 
 | Venue | Observed architecture | Best first source | Confidence |
 |---|---|---|---|
 | Rio Theatre | WordPress + custom `barker-events` plugin | Plugin REST/AJAX request used by calendar navigation | High |
+| The Park Theatre | Expected to match the Rio (same operator since December 2025) | Same Barker listings request on `theparktheatre.ca` | Medium, unverified |
 | The Cinematheque | Server-rendered film/calendar pages + Vista Websales ticket links | Film/calendar HTML; Vista `evtinfo` as ticket session ID | High |
 | VIFF Centre | WordPress listings + Elevent embedded booking widget | Server-rendered What's On pages; Elevent only for availability/detail gaps | High |
 | Hollywood Theatre | Webflow CMS + Finsweet CMS pagination | Webflow listing HTML and pagination URLs | High |
@@ -67,6 +68,22 @@ Capture these response fields if present:
 ### Decision gate
 
 Prefer a public GET REST route that works without a nonce. If the only source is `admin-ajax.php`, determine the `action` value and whether the nonce is actually validated. Do not persist or replay a short-lived browser nonce in production. If the JSON response omits ticket links, combine the schedule endpoint with the public detail page rather than scraping the visual calendar grid.
+
+## The Park Theatre
+
+### Observed
+
+- Cineplex gave up the lease in October 2025; the theatre reopened in December 2025 under the Rio's management (Chris Ferguson, Oddfellows Pictures) with 4K laser and 70mm projection.
+- The public site is `https://www.theparktheatre.ca/`.
+- The site has not been inspected from this repository yet. Because it shares an operator with the Rio, the worker assumes the same WordPress + Barker stack and requests `/wp-json/barker/v1/listings` with the Rio's parameters.
+
+### Network-tab target
+
+Repeat the Rio procedure on the Park's calendar page and confirm the `barker` request exists, returns the same listing shape (`id`, `event.title`, `event.link`, `start_time`, `end_time`, `extra`, `premiere`, `tickets_link`), and needs no nonce.
+
+### Decision gate
+
+If the Park's site does not expose the Barker endpoint, the `park-theatre` ingestion run will record a failed run without affecting the other venues. Replace `extractPark` with an adapter for whatever the site actually serves before relying on it.
 
 ## The Cinematheque
 

@@ -1,11 +1,20 @@
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
+import { venueSlugSchema } from "../src/contracts.js";
 import {
   parseCinemathequeFilmPage,
   parseHollywoodEventPage,
+  parseParkPayload,
   parseRioPayload,
   parseViffPage,
+  VENUE_EXTRACTORS,
 } from "../src/extractors/index.js";
+
+describe("venue registry", () => {
+  it("has an extractor for every venue slug", () => {
+    expect(Object.keys(VENUE_EXTRACTORS).sort()).toEqual([...venueSlugSchema.options].sort());
+  });
+});
 
 describe("Rio Theatre", () => {
   const listing = { id: 350691, event: { id: 350552, title: "Tony", link: "https://riotheatre.ca/movie/tony/" }, start_time: "2026-09-22T18:30:00-07:00", extra: "", premiere: false, tickets_link: "https://riotheatretickets.ca/events/45357-tony" };
@@ -24,6 +33,14 @@ describe("Rio Theatre", () => {
   it("turns the premiere flag and extra text into tags", () => {
     const [showtime] = parseRioPayload([{ ...listing, premiere: true, extra: "  Q&A with director " }]);
     expect(showtime?.tags).toEqual(["premiere", "Q&A with director"]);
+  });
+});
+
+describe("The Park Theatre", () => {
+  it("reads the same Barker payload as the Rio under its own venue slug", () => {
+    const [showtime] = parseParkPayload([{ id: 9001, event: { id: 9000, title: "The Park Presents: Lawrence of Arabia", link: "https://www.theparktheatre.ca/movie/lawrence-of-arabia/" }, start_time: "2026-10-03T19:00:00-07:00", end_time: "", extra: "70mm", premiere: false, tickets_link: "" }]);
+    expect(showtime).toMatchObject({ venueSlug: "park-theatre", sourceUid: "9001", rawTitle: "The Park Presents: Lawrence of Arabia", tags: ["70mm"] });
+    expect(showtime?.ticketUrl).toBeUndefined();
   });
 });
 

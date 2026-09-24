@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const venueSlugSchema = z.enum([
   "rio-theatre",
+  "park-theatre",
   "the-cinematheque",
   "viff-centre",
   "hollywood-theatre",

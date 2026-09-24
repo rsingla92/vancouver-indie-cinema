@@ -25,7 +25,7 @@ const NON_FILM_PATTERNS = [
 
 // Venue-specific series and event labels that precede or accompany a title.
 const PROMO_LABEL =
-  "special (?:event|presentation|screening)|encore(?: presentation| screening)?|(?:the )?rio presents|viff presents|" +
+  "special (?:event|presentation|screening)|encore(?: presentation| screening)?|(?:the )?rio presents|(?:the )?park(?: theatre)? presents|viff presents|" +
   "(?:the )?cinematheque presents|hollywood theatre presents|double (?:feature|bill)|late (?:night|nite)|community screening|" +
   "members?['’]? (?:only )?screening|members? only|film club|cinema club|free screening|free|sneak preview|preview screening|" +
   "preview|opening night|closing night|staff picks?|new (?:[24]k )?restoration|[24]k restoration|[24]k|" +

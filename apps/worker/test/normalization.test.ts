@@ -37,6 +37,7 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("Nosferatu (1922) with live score")).toMatchObject({ coreTitle: "Nosferatu", releaseYear: 1922, tags: ["live"] });
     expect(normalizer.normalize("Chungking Express [4K]").coreTitle).toBe("Chungking Express");
     expect(normalizer.normalize("The Rio Presents: Tampopo").coreTitle).toBe("Tampopo");
+    expect(normalizer.normalize("The Park Presents: Lawrence of Arabia (70mm)")).toMatchObject({ coreTitle: "Lawrence of Arabia", tags: ["70mm"] });
     expect(normalizer.normalize("Studio Ghibli Fest: Spirited Away").coreTitle).toBe("Spirited Away");
     expect(normalizer.normalize("Perfect Days — Vancouver Premiere").coreTitle).toBe("Perfect Days");
     expect(normalizer.normalize("Rocky Horror Picture Show (Sing-Along + Shadow Cast)")).toMatchObject({ coreTitle: "Rocky Horror Picture Show", tags: ["sing-along"] });

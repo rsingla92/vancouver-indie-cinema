@@ -22,7 +22,7 @@ The end-to-end MVP includes source extraction, deterministic title normalization
 - [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md): source investigation and Network-tab capture protocol
 - [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql): relational schema
 - [`supabase/migrations/002_normalization_pipeline.sql`](supabase/migrations/002_normalization_pipeline.sql): match-review state and read policies
-- [`supabase/migrations/003_seed_theatres.sql`](supabase/migrations/003_seed_theatres.sql): the four venues the worker ingests
+- [`supabase/migrations/003_seed_theatres.sql`](supabase/migrations/003_seed_theatres.sql) and [`004_seed_park_theatre.sql`](supabase/migrations/004_seed_park_theatre.sql): the venues the worker ingests
 
 ## Local setup
 
@@ -34,7 +34,7 @@ npm run dev
 
 Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses labelled demo listings for visual development.
 
-Apply the three SQL migrations in order. The seed migration is idempotent and must run before the worker, which resolves each venue by slug.
+Apply the SQL migrations in order. The seed migrations are idempotent and must run before the worker, which resolves each venue by slug.
 
 ## Ingestion
 
@@ -43,7 +43,7 @@ npm run ingest                                    # every venue, 60-day horizon
 npm run ingest -- --days=30 --venues=rio-theatre  # narrower run
 ```
 
-For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. Venue slugs are `rio-theatre`, `the-cinematheque`, `viff-centre`, and `hollywood-theatre`.
+For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. Venue slugs are `rio-theatre`, `park-theatre`, `the-cinematheque`, `viff-centre`, and `hollywood-theatre`. The Rio and the Park share one adapter for the Barker events plugin their sites run.
 
 The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
 

@@ -43,6 +43,19 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("Rocky Horror Picture Show (Sing-Along + Shadow Cast)")).toMatchObject({ coreTitle: "Rocky Horror Picture Show", tags: ["sing-along"] });
   });
 
+  it("keeps titles that merely end in a series-like word", () => {
+    expect(normalizer.normalize("The Breakfast Club: 35mm")).toMatchObject({ coreTitle: "The Breakfast Club", tags: ["35mm"] });
+    expect(normalizer.normalize("The Breakfast Club: 40th Anniversary").coreTitle).toBe("The Breakfast Club");
+    expect(normalizer.normalize("Fight Club: Director's Cut").coreTitle).toBe("Fight Club");
+    expect(normalizer.normalize("Film Series: Tokyo Story").coreTitle).toBe("Tokyo Story");
+  });
+
+  it("treats concert films as films", () => {
+    expect(normalizer.normalize("Stop Making Sense (Concert Film)")).toMatchObject({ coreTitle: "Stop Making Sense", contentKind: "film" });
+    expect(normalizer.normalize("Summer of Soul (Documentary)").coreTitle).toBe("Summer of Soul");
+    expect(normalizer.normalize("Live in Concert: The Beaches").contentKind).toBe("non_film");
+  });
+
   it("leaves ordinary titles untouched", () => {
     for (const title of ["Paris, Texas", "Dune: Part Two", "Léon: The Professional", "Uncut Gems", "Extended Family", "The Party", "Festival Express"]) {
       expect(normalizer.normalize(title)).toMatchObject({ coreTitle: title, contentKind: "film", confidence: 0.96 });

@@ -5,7 +5,7 @@ import { extractPark } from "./park.js";
 import { extractRio } from "./rio.js";
 import { extractViff } from "./viff.js";
 
-export { extractBarker, parseBarkerPayload, PARK_THEATRE, RIO_THEATRE, type BarkerVenue } from "./barker.js";
+export { extractBarker, parseBarkerPayload, PARK_THEATRE, RIO_THEATRE, type BarkerOptions, type BarkerVenue, type ParsedBarkerPayload } from "./barker.js";
 export { extractRio, parseRioPayload } from "./rio.js";
 export { extractPark, parseParkPayload } from "./park.js";
 export { extractCinematheque, parseCinemathequeFilmLinks, parseCinemathequeFilmPage } from "./cinematheque.js";

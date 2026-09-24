@@ -5,6 +5,12 @@ import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime } from "
 
 const BASE = "https://www.hollywoodtheatre.ca";
 
+export interface HollywoodPageResult {
+  showtimes: ExtractedShowtime[];
+  /** Set when a film page could not be read, so the batch is not mistaken for complete. */
+  warning?: string;
+}
+
 export function parseHollywoodEventLinks(html: string): string[] {
   const $ = load(html);
   return [...new Set(
@@ -14,30 +20,31 @@ export function parseHollywoodEventLinks(html: string): string[] {
   )];
 }
 
-export function parseHollywoodEventPage(html: string, pageUrl: string): ExtractedShowtime[] {
+export function parseHollywoodEventPage(html: string, pageUrl: string): HollywoodPageResult {
   const $ = load(html);
   const categories = $("a[href^='/categories/']")
     .map((_, element) => cleanText($(element).text()).toLowerCase())
     .get();
-  if (!categories.includes("film")) return [];
+  if (!categories.includes("film")) return { showtimes: [] };
 
   const rawTitle = cleanText($("h1.heading-events").first().text() || $("title").text().split(" at Hollywood")[0]);
   const description = $("meta[name='description']").attr("content") ?? "";
   const dateMatch = description.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i);
-  if (!rawTitle || !dateMatch) return [];
+  if (!rawTitle) return { showtimes: [], warning: `${pageUrl}: film page has no title` };
+  if (!dateMatch) return { showtimes: [], warning: `${pageUrl}: film page has no recognisable date` };
 
   // Join text nodes with spaces so adjacent elements never fuse into one word.
   const bodyText = cleanText($("body *").contents().filter((_, node) => node.type === "text").map((_, node) => $(node).text()).get().join(" "));
   const showTimes = [...bodyText.matchAll(/\bSHOW\s*:\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi)]
     .map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
   const uniqueTimes = [...new Set(showTimes)];
-  if (uniqueTimes.length === 0) return [];
+  if (uniqueTimes.length === 0) return { showtimes: [], warning: `${pageUrl}: film page has no show time` };
 
   const ticketAnchor = $("a").filter((_, element) => /(?:get|buy)\s*tickets/i.test(cleanText($(element).text()))).first();
   const ticketHref = ticketAnchor.attr("href");
   const slug = new URL(pageUrl).pathname.split("/").filter(Boolean).at(-1)!;
 
-  return uniqueTimes.map((time, index) => {
+  const showtimes = uniqueTimes.map((time, index) => {
     const startsAt = parseDateTime(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]} ${time}`, ["LLLL d yyyy h:mm a", "LLLL d yyyy h a"]);
     return extractedShowtimeSchema.parse({
       venueSlug: "hollywood-theatre",
@@ -50,6 +57,7 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Extracte
       sourcePayload: { description, categories, showTimeText: time },
     });
   });
+  return { showtimes };
 }
 
 export async function extractHollywood(maxPages = 20): Promise<ExtractionBatch> {
@@ -62,12 +70,16 @@ export async function extractHollywood(maxPages = 20): Promise<ExtractionBatch> 
     const html = await fetchText(url);
     const links = parseHollywoodEventLinks(html);
     links.forEach((link) => eventLinks.add(link));
-    if (!/aria-label=["']Next Page["']/.test(html) || links.length === 0) break;
+    const hasNext = /aria-label=["']Next Page["']/.test(html) && links.length > 0;
+    if (!hasNext) break;
+    if (page === maxPages) warnings.push(`stopped at page cap (${maxPages}); listings may be incomplete`);
   }
 
   const pages = await mapWithConcurrency([...eventLinks], 4, async (url) => {
     try {
-      return parseHollywoodEventPage(await fetchText(new URL(url)), url);
+      const result = parseHollywoodEventPage(await fetchText(new URL(url)), url);
+      if (result.warning) warnings.push(result.warning);
+      return result.showtimes;
     } catch (error) {
       warnings.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
       return [];

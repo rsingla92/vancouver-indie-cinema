@@ -6,21 +6,27 @@ import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime, VANCOUV
 
 const BASE = "https://thecinematheque.ca";
 
-export function parseCinemathequeFilmPage(html: string, pageUrl: string): ExtractedShowtime[] {
+/**
+ * Screening dates on a film page carry a month, day and weekday but no year. The
+ * year is inferred relative to `reference` (the crawl time) and the weekday token
+ * settles the December-to-January boundary; the programme year in the page URL
+ * is deliberately not used because a page can list screenings in the next year.
+ */
+export function parseCinemathequeFilmPage(html: string, pageUrl: string, reference?: DateTime): ExtractedShowtime[] {
   const $ = load(html);
   const rawTitle = cleanText($(".filmTitle").first().text() || $("h1").first().text() || $("title").text().split("|")[0]);
-  const yearMatch = new URL(pageUrl).pathname.match(/\/films\/(\d{4})\//);
-  const year = yearMatch ? Number(yearMatch[1]) : DateTime.now().setZone(VANCOUVER_TZ).year;
+  const now = reference ?? DateTime.now().setZone(VANCOUVER_TZ);
   const output: ExtractedShowtime[] = [];
 
   $("#screeningDates a[href*='evtinfo=']").each((_, element) => {
     const anchor = $(element);
     const ticketUrl = absoluteUrl(anchor.attr("href")!, pageUrl);
     const evtInfo = new URL(ticketUrl).searchParams.get("evtinfo")?.split("~")[0];
+    const weekday = cleanText(anchor.find(".dow").text()).replace(/[()]/g, "");
     const monthDay = cleanText(anchor.clone().find(".dow,.time").remove().end().text());
     const time = cleanText(anchor.find(".time").text());
     const period = anchor.find(".time").hasClass("pm") ? "pm" : "am";
-    const startsAt = parseDateTime(`${monthDay} ${time} ${period}`, ["LLLL d h:mm a", "LLL d h:mm a"], { year });
+    const startsAt = parseScreeningDate(weekday, `${monthDay} ${time} ${period}`, now);
 
     output.push(extractedShowtimeSchema.parse({
       venueSlug: "the-cinematheque",
@@ -35,6 +41,17 @@ export function parseCinemathequeFilmPage(html: string, pageUrl: string): Extrac
   });
 
   return output;
+}
+
+function parseScreeningDate(weekday: string, value: string, reference: DateTime): DateTime {
+  if (weekday) {
+    try {
+      return parseDateTime(`${weekday} ${value}`, ["cccc LLLL d h:mm a", "cccc LLL d h:mm a"], { reference });
+    } catch {
+      // A weekday that matches no nearby year is a site typo; fall back to the date alone.
+    }
+  }
+  return parseDateTime(value, ["LLLL d h:mm a", "LLL d h:mm a"], { reference });
 }
 
 export function parseCinemathequeFilmLinks(html: string): string[] {

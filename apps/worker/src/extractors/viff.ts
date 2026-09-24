@@ -68,6 +68,7 @@ export async function extractViff(maxPages = 20): Promise<ExtractionBatch> {
     showtimes.push(...parsed);
     if (parsed.length === 0) warnings.push(`${url}: no showtimes parsed`);
     if (!html.includes(`/whats-on/page/${page + 1}/`)) break;
+    if (page === maxPages) warnings.push(`stopped at page cap (${maxPages}); listings may be incomplete`);
   }
 
   return { venueSlug: "viff-centre", fetchedAt: new Date().toISOString(), showtimes, warnings };

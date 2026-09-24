@@ -24,16 +24,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.check.outputs.run }}
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      SCHEDULE: ${{ github.event.schedule }}
     steps:
       - id: check
+        # Decide by which cron fired and the current UTC offset, not by the wall
+        # clock, so a delayed start never skips the day's run.
         run: |
-          hour=$(TZ=America/Vancouver date +%H)
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "$hour" = "09" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Skipping: it is ${hour}:00 in Vancouver, not 09:00."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
+          offset=$(TZ=America/Vancouver date +%z)
+          case "$EVENT_NAME:$SCHEDULE:$offset" in
+            schedule:"0 16 * * *":-0700|schedule:"0 17 * * *":-0800)
+              echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            schedule:*)
+              echo "Skipping: cron '$SCHEDULE' is not the 9 a.m. run for UTC offset $offset."
+              echo "run=false" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "run=true" >> "$GITHUB_OUTPUT" ;;
+          esac
 
   ingest:
     needs: clock
@@ -51,7 +59,11 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run ingestion
+        # Inputs reach the shell through the environment, never through template expansion.
+        env:
+          DAYS: ${{ inputs.days || '60' }}
+          VENUES: ${{ inputs.venues }}
         run: |
-          args="--days=${{ inputs.days || '60' }}"
-          if [ -n "${{ inputs.venues }}" ]; then args="$args --venues=${{ inputs.venues }}"; fi
-          npm run ingest -- $args
+          set -- "--days=$DAYS"
+          if [ -n "$VENUES" ]; then set -- "$@" "--venues=$VENUES"; fi
+          npm run ingest -- "$@"

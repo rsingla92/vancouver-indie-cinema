@@ -26,6 +26,26 @@ export interface IngestionRunSummary {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Limits on how much one run may hide. An extraction that silently lost part of
+ * a schedule would otherwise deactivate everything it failed to see.
+ */
+export interface ReconciliationGuard {
+  /** Refuse when more than this fraction of the venue's active future showtimes is unseen. */
+  maxFraction: number;
+  /** ...but only once at least this many rows would be hidden, so small venues can still cancel. */
+  minCount: number;
+}
+
+export const DEFAULT_RECONCILIATION_GUARD: ReconciliationGuard = { maxFraction: 0.5, minCount: 5 };
+
+export interface DeactivationResult {
+  deactivated: number;
+  unseen: number;
+  active: number;
+  skipped: boolean;
+}
+
 const NO_CANDIDATE_REASON = "No candidate cleared the confidence and ambiguity thresholds";
 const ERROR_SUMMARY_LIMIT = 4000;
 
@@ -38,6 +58,8 @@ export function tagCategory(label: string): "format" | "accessibility" | "experi
   if (/caption|subtitle|described|accessib|relaxed|sensory/i.test(label)) return "accessibility";
   return "experience";
 }
+
+const httpsOrNull = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
 
 export class CinemaRepository {
   private readonly sql: postgres.Sql;
@@ -70,14 +92,31 @@ export class CinemaRepository {
   /**
    * Hide future showtimes the source no longer publishes. History is kept; the row
    * simply stops being active. Only rows starting before `until` are considered so a
-   * date-bounded fetch never hides sessions it was not asked about.
+   * date-bounded fetch never hides sessions it was not asked about, and the guard
+   * refuses to hide most of a venue's schedule in one go.
    */
-  async deactivateUnseenShowtimes(theatreId: string, seenSourceUids: string[], until: Date): Promise<number> {
-    const result = await this.sql`
-      update showtimes set is_active = false
-      where theatre_id = ${theatreId} and is_active and starts_at > now() and starts_at <= ${until}
-        and source_uid <> all(${seenSourceUids}::text[])`;
-    return result.count;
+  async deactivateUnseenShowtimes(
+    theatreId: string,
+    seenSourceUids: string[],
+    until: Date,
+    guard: ReconciliationGuard = DEFAULT_RECONCILIATION_GUARD,
+  ): Promise<DeactivationResult> {
+    return this.sql.begin(async (sql) => {
+      const counts = await sql<{ active: number; unseen: number }[]>`
+        select count(*)::int as active,
+          count(*) filter (where source_uid <> all(${seenSourceUids}::text[]))::int as unseen
+        from showtimes
+        where theatre_id = ${theatreId} and is_active and starts_at > now() and starts_at <= ${until}`;
+      const { active, unseen } = counts[0]!;
+      if (unseen >= guard.minCount && unseen > active * guard.maxFraction) {
+        return { deactivated: 0, unseen, active, skipped: true };
+      }
+      const result = await sql`
+        update showtimes set is_active = false
+        where theatre_id = ${theatreId} and is_active and starts_at > now() and starts_at <= ${until}
+          and source_uid <> all(${seenSourceUids}::text[])`;
+      return { deactivated: result.count, unseen, active, skipped: false };
+    });
   }
 
   async merge(input: MergeInput): Promise<MergeResult> {
@@ -88,12 +127,15 @@ export class CinemaRepository {
 
       const status = input.candidate ? "matched" : "review";
       const payload = JSON.parse(JSON.stringify(input.item.sourcePayload)) as postgres.JSONValue;
+      // The purchase CTA must be an https link; fall back to the venue's own detail page.
+      const ticketUrl = httpsOrNull(input.item.ticketUrl) ?? httpsOrNull(input.item.detailUrl);
+
       const rawRows = await sql<{ id: string }[]>`
         insert into raw_source_items (theatre_id, ingestion_run_id, source_uid, raw_title, source_url, payload, payload_hash,
           normalized_title, normalized_year, normalization_confidence, normalization_method,
           normalization_rules_version, normalization_output, normalization_status, tmdb_candidate_id,
           match_confidence, match_reason, resolved_at)
-        values (${theatre.id}, ${input.ingestionRunId ?? null}, ${input.item.sourceUid}, ${input.item.rawTitle}, ${input.item.detailUrl},
+        values (${theatre.id}, ${input.ingestionRunId ?? null}, ${input.item.sourceUid}, ${input.item.rawTitle}, ${httpsOrNull(input.item.detailUrl)},
           ${sql.json(payload)}, ${input.payloadHash}, ${input.normalized.coreTitle},
           ${input.normalized.releaseYear}, ${input.normalized.confidence}, 'deterministic', ${input.rulesVersion},
           ${sql.json(input.normalized)}, ${status}, ${input.candidate?.movie.id ?? null},
@@ -111,7 +153,18 @@ export class CinemaRepository {
           match_reason = excluded.match_reason, resolved_at = excluded.resolved_at
         returning id`;
       const raw = rawRows[0]!;
-      if (!input.candidate) return { status: "review" };
+
+      if (!input.candidate) {
+        // No confident film today, but a showtime linked on an earlier run must still
+        // follow the source: keep its film, refresh everything the venue publishes.
+        await sql`
+          update showtimes set raw_source_item_id = ${raw.id}, display_title = ${input.item.rawTitle},
+            starts_at = ${input.item.startsAt}, ends_at = ${input.item.endsAt ?? null},
+            ticket_url = coalesce(${ticketUrl}, ticket_url), status = ${input.item.status},
+            is_active = true, last_seen_at = now()
+          where theatre_id = ${theatre.id} and source_uid = ${input.item.sourceUid}`;
+        return { status: "review" };
+      }
 
       const movie = input.candidate.movie;
       const releaseYear = movie.release_date ? Number(movie.release_date.slice(0, 4)) : input.normalized.releaseYear;
@@ -126,8 +179,6 @@ export class CinemaRepository {
         returning id`;
       const movieRow = movieRows[0]!;
 
-      // The purchase CTA must be an https link; fall back to the venue's own detail page.
-      const ticketUrl = [input.item.ticketUrl, input.item.detailUrl].find((url) => url?.startsWith("https://"));
       if (!ticketUrl) throw new Error(`No https ticket or detail URL for ${input.item.venueSlug}/${input.item.sourceUid}`);
 
       const showtimeRows = await sql<{ id: string }[]>`
@@ -153,6 +204,9 @@ export class CinemaRepository {
           select ${showtime.id}::uuid, id, ${label} from tags where slug = ${slug}
           on conflict do nothing`;
       }
+      // Tags the source no longer mentions come off the showtime.
+      await sql`delete from showtime_tags where showtime_id = ${showtime.id}
+        and tag_id not in (select id from tags where slug = any(${[...labels.keys()]}::text[]))`;
 
       return { status: "matched", movieId: movieRow.id, showtimeId: showtime.id };
     });

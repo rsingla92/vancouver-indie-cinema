@@ -1,5 +1,6 @@
 import { filenameParse } from "@ctrl/video-filename-parser";
 import type { NormalizedTitle, TitleNormalizer } from "./contracts.js";
+import { canonicalTitle } from "./text.js";
 
 export const NORMALIZATION_RULES_VERSION = "title-rules-v2";
 
@@ -18,7 +19,7 @@ const TAG_PATTERNS: ReadonlyArray<readonly [Tag, RegExp]> = [
 
 const NON_FILM_PATTERNS = [
   /\b(?:comedy|trivia|karaoke|quiz|bingo|open\s+mic|drag)\s+(?:night|show)\b/i,
-  /\b(?:concert|workshop|lecture|panel\s+discussion|book\s+launch|stand-?up\s+comedy)\b/i,
+  /\b(?:concert(?!\s+(?:film|doc|documentary|movie))|workshop|lecture|panel\s+discussion|book\s+launch|stand-?up\s+comedy)\b/i,
   /\b(?:dance|after|release|launch|costume|halloween|new\s+year'?s?(?:\s+eve)?|listening|album)\s+party\b/i,
   /\blive\s+(?:music|podcast|performance|comedy|taping|reading)\b/i,
 ];
@@ -30,11 +31,13 @@ const PROMO_LABEL =
   "members?['’]? (?:only )?screening|members? only|film club|cinema club|free screening|free|sneak preview|preview screening|" +
   "preview|opening night|closing night|staff picks?|new (?:[24]k )?restoration|[24]k restoration|[24]k|" +
   "(?:vancouver|canadian|west coast|north american|world) premiere|premiere|matinee|all ages|19\\+|sold out|" +
-  "cult classics?|movie night|film night|film series|series";
+  "cult classics?|movie night|film night|film series|series|" +
+  "\\d+(?:st|nd|rd|th)[- ]anniversary(?: (?:screening|edition|celebration|presentation))?|anniversary (?:screening|edition)";
 
 const PREFIX_PATTERN = new RegExp(`^(?:${PROMO_LABEL})\\s*[:\\-–—|]\\s*`, "i");
 // "Studio Ghibli Fest: Spirited Away", "Cinema Salon: Tokyo Story" — a short series name ending in a series-ish word.
-const SERIES_PREFIX_PATTERN = /^[^:|]{0,60}?\b(?:fest|festival|series|salon|club|presents|classics|month|week|showcase|spotlight|retrospective|marathon)\s*:\s*/i;
+// Words like "club" are deliberately absent: "Fight Club: 35mm" is a title, not a series.
+const SERIES_PREFIX_PATTERN = /^[^:|]{0,60}?\b(?:fest|festival|series|salon|presents|showcase|spotlight|retrospective|marathon)\s*:\s*/i;
 // "Perfect Days — Vancouver Premiere", "Moonlight (Free)"
 const TRAILING_PROMO_PATTERN = new RegExp(`\\s*[-–—:|(\\[]\\s*(?:${PROMO_LABEL})\\s*[)\\]]?\\s*$`, "i");
 // "(Sing-Along + Shadow Cast)" after the tag is removed leaves "( + Shadow Cast)": an add-on, not the title.
@@ -55,6 +58,8 @@ const SUFFIX_PATTERNS = [
   new RegExp(`\\s*[(\\[]\\s*(?:${EVENT_SUFFIX})[^)\\]]*[)\\]]`, "i"),
 ];
 
+// "(Concert Film)", "(Documentary)": a description of the film, not part of its title.
+const DESCRIPTOR_BRACKET_PATTERN = /\s*[(\[]\s*(?:concert (?:film|documentary|movie)|documentary|short film|silent film)\s*[)\]]/gi;
 const EDITION_PATTERN = /\s*[(\[]?\s*\b(?:[24]k(?:\s+(?:digital\s+)?(?:restoration|remaster|scan|dcp|print))?|remastered|restored|new\s+restoration|director'?s\s+cut|final\s+cut|extended\s+(?:cut|edition|version)|theatrical\s+(?:cut|version)|imax|dcp|digital\s+restoration|new\s+print|archival\s+print|\d{2}mm\s+print)\b\s*[)\]]?/gi;
 
 const BRACKETED_YEAR = /[(\[]\s*((?:18|19|20)\d{2})\s*[)\]]/;
@@ -64,17 +69,16 @@ const EMPTY_BRACKETS = /\(\s*\)|\[\s*\]/g;
 const EDGE_SEPARATORS = /^[\s:|\-–—+•,]+|[\s:|\-–—+•,]+$/g;
 const DANGLING_CONNECTOR = /\s+(?:with|and|&|featuring|feat\.?|w\/)\s*$/i;
 
-function canonical(value: string): string {
-  return value.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function tidy(value: string): string {
   return value.replace(EMPTY_BRACKETS, " ").replace(/\s+/g, " ").replace(EDGE_SEPARATORS, "").replace(DANGLING_CONNECTOR, "").trim();
 }
 
+/** True when a piece of text carries no title, only labels, tags or edition words. */
 function isPromotionalSegment(segment: string): boolean {
   if (PROMO_SEGMENT_PATTERN.test(segment)) return true;
-  return TAG_PATTERNS.some(([, pattern]) => tidy(segment.replace(pattern, " ")) === "");
+  let rest = segment.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ");
+  for (const [, pattern] of TAG_PATTERNS) rest = rest.replace(pattern, " ");
+  return tidy(rest) === "";
 }
 
 /** "Eraserhead | Late Night" → "Eraserhead"; "VIFF Presents | Perfect Days" → "Perfect Days". */
@@ -109,14 +113,20 @@ export class DeterministicTitleNormalizer implements TitleNormalizer {
     );
 
     let cleaned = rest;
-    for (let pass = 0; pass < 3 && (PREFIX_PATTERN.test(cleaned) || SERIES_PREFIX_PATTERN.test(cleaned)); pass += 1) {
-      cleaned = cleaned.replace(PREFIX_PATTERN, "").replace(SERIES_PREFIX_PATTERN, "");
+    for (let pass = 0; pass < 3; pass += 1) {
+      if (PREFIX_PATTERN.test(cleaned)) { cleaned = cleaned.replace(PREFIX_PATTERN, ""); continue; }
+      const series = cleaned.match(SERIES_PREFIX_PATTERN);
+      if (!series) break;
+      // Only drop a series prefix when a title is left behind; "Fight Club: 35mm" keeps "Fight Club".
+      const remainder = cleaned.slice(series[0].length);
+      if (isPromotionalSegment(remainder)) break;
+      cleaned = remainder;
     }
     cleaned = chooseSegment(cleaned);
     for (const pattern of SUFFIX_PATTERNS) cleaned = cleaned.replace(pattern, "");
     for (let pass = 0; pass < 2 && TRAILING_PROMO_PATTERN.test(cleaned); pass += 1) cleaned = cleaned.replace(TRAILING_PROMO_PATTERN, "");
     for (const [, pattern] of TAG_PATTERNS) cleaned = cleaned.replace(pattern, " ");
-    cleaned = tidy(cleaned.replace(EDITION_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
+    cleaned = tidy(cleaned.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
 
     // Radarr-style parsing is a final safety net for release-style suffixes. It is only
     // trusted when it merely trims the end of the title and did not mistake part of the
@@ -127,7 +137,7 @@ export class DeterministicTitleNormalizer implements TitleNormalizer {
       parsedTitle && !parsed.year && cleaned.toLowerCase().startsWith(parsedTitle.toLowerCase()) ? parsedTitle : cleaned,
     ) || rawTitle.trim();
 
-    const changed = canonical(coreTitle) !== canonical(rawTitle);
+    const changed = canonicalTitle(coreTitle) !== canonicalTitle(rawTitle);
     return {
       coreTitle,
       releaseYear,

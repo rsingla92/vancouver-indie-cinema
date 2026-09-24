@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { getDemoShowtimes } from "./demo-data";
-import { VANCOUVER_TZ } from "./format";
+import { VANCOUVER_TZ, vancouverDateKey } from "./format";
 import type { ShowtimeView } from "./types";
 
 export const DEFAULT_DAYS = 7;
@@ -35,8 +35,6 @@ export function clampDays(value: unknown, fallback = DEFAULT_DAYS): number {
   return Math.min(MAX_DAYS, Math.max(1, Math.floor(parsed)));
 }
 
-const dayKeyFormat = new Intl.DateTimeFormat("en-CA", { timeZone: VANCOUVER_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
-
 /**
  * Upcoming showtimes from now through the end of the Nth Vancouver calendar day,
  * so `days = 1` means "the rest of today" rather than the next 24 hours.
@@ -47,8 +45,8 @@ export async function getShowtimes(days = DEFAULT_DAYS): Promise<ShowtimesResult
   const sql = getSql();
 
   if (!sql) {
-    const lastDay = dayKeyFormat.format(new Date(now.getTime() + (days - 1) * 86_400_000));
-    const data = getDemoShowtimes(now).filter((item) => dayKeyFormat.format(new Date(item.startsAt)) <= lastDay);
+    const lastDay = vancouverDateKey(new Date(now.getTime() + (days - 1) * 86_400_000));
+    const data = getDemoShowtimes(now).filter((item) => vancouverDateKey(item.startsAt) <= lastDay);
     return { data, demo: true, generatedAt };
   }
 

@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatClock, formatDay, formatLongDay, vancouverDateKey } from "@/lib/format";
+import { readSaved, toggleSaved, writeSaved, type SavedFilm } from "@/lib/saved";
 import { firstShowtimePerMovie, matchesQuery } from "@/lib/showtimes";
 import type { ShowtimeView } from "@/lib/types";
 
-const SAVED_KEY = "indiescreen:saved";
 const TICKER_LIMIT = 8;
 
 type NavTab = "tonight" | "showtimes" | "saved";
@@ -13,23 +13,6 @@ const NAV: ReadonlyArray<{ id: NavTab; href: string; label: string }> = [
   { id: "showtimes", href: "#showtimes", label: "Schedule" },
   { id: "saved", href: "#saved", label: "Saved" },
 ];
-
-function readSaved(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(SAVED_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSaved(ids: string[]) {
-  try {
-    localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
-  } catch {
-    // Storage may be unavailable (private mode, quota); saving is best-effort.
-  }
-}
 
 function Stamp({ children, tone = "ink" }: { children: ReactNode; tone?: "ink" | "red" }) {
   return <em className={`stamp ${tone}`}>{children}</em>;
@@ -62,13 +45,14 @@ interface CinemaAppProps {
 export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProps) {
   const [venue, setVenue] = useState("all");
   const [query, setQuery] = useState("");
-  const [saved, setSaved] = useState<string[]>([]);
+  const [saved, setSaved] = useState<SavedFilm[]>([]);
   const [tab, setTab] = useState<NavTab>("tonight");
 
-  useEffect(() => { setSaved(readSaved()); }, []);
+  useEffect(() => { setSaved(readSaved(initialShowtimes)); }, [initialShowtimes]);
 
-  const toggleSaved = (movieId: string) => setSaved((current) => {
-    const next = current.includes(movieId) ? current.filter((id) => id !== movieId) : [...current, movieId];
+  const isSavedId = (movieId: string) => saved.some((film) => film.movieId === movieId);
+  const toggle = (item: ShowtimeView) => setSaved((current) => {
+    const next = toggleSaved(current, { movieId: item.movieId, title: item.title, theatre: item.theatre.name });
     writeSaved(next);
     return next;
   });
@@ -77,7 +61,11 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
   const searching = query.trim().length > 0;
   const visible = useMemo(() => initialShowtimes.filter((item) => (venue === "all" || item.theatre.slug === venue) && matchesQuery(item, query)), [initialShowtimes, venue, query]);
   const movies = useMemo(() => firstShowtimePerMovie(visible), [visible]);
-  const savedMovies = useMemo(() => firstShowtimePerMovie(initialShowtimes.filter((item) => saved.includes(item.movieId))), [initialShowtimes, saved]);
+  // Each saved film with its next screening, or null when nothing is coming up.
+  const savedRows = useMemo(() => {
+    const upcoming = new Map(firstShowtimePerMovie(initialShowtimes).map((item) => [item.movieId, item]));
+    return saved.map((film) => ({ film, next: upcoming.get(film.movieId) ?? null }));
+  }, [initialShowtimes, saved]);
 
   const featured = movies[0];
   const featuredTonight = featured ? vancouverDateKey(featured.startsAt) === vancouverDateKey(generatedAt) : false;
@@ -136,12 +124,12 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
         </div>
         {demo && <p className="notice"><b>Sample listings.</b> Set DATABASE_URL to show the live schedule.</p>}
         {movies.length > 0 ? <div className="flyers">{movies.map((movie) => {
-          const isSaved = saved.includes(movie.movieId);
+          const isSaved = isSavedId(movie.movieId);
           return <article className="flyer" key={movie.movieId}>
             <div className="flyer-poster"><Poster movie={movie} />{movie.tags[0] && <Stamp>{movie.tags[0]}</Stamp>}</div>
             <h3>{movie.title}</h3>
             <p className="flyer-meta">{movie.year ? `${movie.year} · ` : ""}{movie.theatre.name}</p>
-            <button type="button" className="textlink" aria-pressed={isSaved} aria-label={isSaved ? `Remove ${movie.title} from saved` : `Save ${movie.title} `} onClick={() => toggleSaved(movie.movieId)}>{isSaved ? "[ saved ]" : "[ save ]"}</button>
+            <button type="button" className="textlink" aria-pressed={isSaved} aria-label={isSaved ? `Remove ${movie.title} from saved` : `Save ${movie.title} `} onClick={() => toggle(movie)}>{isSaved ? "[ saved ]" : "[ save ]"}</button>
           </article>;
         })}</div> : <p className="empty">No films match.</p>}
 
@@ -157,11 +145,13 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
       </section>
 
       <section className="watchlist" id="saved">
-        <h2 className="rule-heading"><span>Saved</span><small>{savedMovies.length} saved</small></h2>
-        {savedMovies.length > 0 ? <ol className="rows">{savedMovies.map((movie) => <li className="row" key={movie.movieId}>
-          <div className="row-when"><b>{formatClock(movie.startsAt)}</b><span>{formatDay(movie.startsAt)}</span></div>
-          <div className="row-what"><h3>{movie.title}</h3><p>{movie.theatre.name}</p></div>
-          <button type="button" className="textlink" aria-label={`Remove ${movie.title} from saved`} onClick={() => toggleSaved(movie.movieId)}>[ remove ]</button>
+        <h2 className="rule-heading"><span>Saved</span><small>{saved.length} saved</small></h2>
+        {savedRows.length > 0 ? <ol className="rows">{savedRows.map(({ film, next }) => <li className="row" key={film.movieId}>
+          {next
+            ? <div className="row-when"><b>{formatClock(next.startsAt)}</b><span>{formatDay(next.startsAt)}</span></div>
+            : <div className="row-when"><span>No upcoming screenings</span></div>}
+          <div className="row-what"><h3>{film.title}</h3><p>{next ? next.theatre.name : film.theatre}</p></div>
+          <button type="button" className="textlink" aria-label={`Remove ${film.title} from saved`} onClick={() => setSaved((current) => { const value = toggleSaved(current, film); writeSaved(value); return value; })}>[ remove ]</button>
         </li>)}</ol> : <p className="empty">Nothing saved. Saved films are kept in this browser.</p>}
       </section>
     </main>

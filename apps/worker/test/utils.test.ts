@@ -23,7 +23,16 @@ describe("parseDateTime", () => {
   it("uses a weekday token to disambiguate the year", () => {
     // Jan 2 is a Saturday in 2027 but a Friday in 2026.
     expect(parseDateTime("Sat Jan 2 7:00 pm", ["ccc LLL d h:mm a"], { reference: reference("2026-12-28") }).toISO()).toBe("2027-01-02T19:00:00.000-08:00");
-    expect(parseDateTime("Sat Sep 26 6:10 pm", ["ccc LLL d h:mm a"], { reference: reference("2027-09-21") }).toISO()).toBe("2026-09-26T18:10:00.000-07:00");
+    expect(parseDateTime("Sat Sep 26 6:10 pm", ["ccc LLL d h:mm a"], { reference: reference("2026-09-21") }).toISO()).toBe("2026-09-26T18:10:00.000-07:00");
+    // Dec 31 is a Thursday in 2026 and a Friday in 2027; seen in early January the Thursday is last week's.
+    expect(parseDateTime("Thu Dec 31 9:00 pm", ["ccc LLL d h:mm a"], { reference: reference("2027-01-03") }).toISO()).toBe("2026-12-31T21:00:00.000-08:00");
+  });
+
+  it("rejects a weekday that only fits a date far from the reference", () => {
+    // September 22 is a Monday in 2025 but the listing was seen in September 2026.
+    expect(() => parseDateTime("Mon Sep 22 7:00 pm", ["ccc LLL d h:mm a"], { reference: reference("2026-09-21") })).toThrow(/Unable to parse/);
+    // With a fallback format the same input still yields a date near the reference.
+    expect(parseDateTime("Sep 22 7:00 pm", ["LLL d h:mm a"], { reference: reference("2026-09-21") }).year).toBe(2026);
   });
 
   it("keeps a year that the format parses explicitly", () => {

@@ -4,6 +4,9 @@ export const VANCOUVER_TZ = "America/Vancouver";
 
 const PARSE_OPTIONS = { zone: VANCOUVER_TZ, locale: "en-CA" } as const;
 
+/** A listing is never this far from the crawl date; a weekday that only fits a year away is a typo. */
+const MAX_DISTANCE_DAYS = 200;
+
 export function cleanText(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -35,7 +38,8 @@ function formatHasYear(format: string): boolean {
  * - Formats that already contain a year token are parsed verbatim.
  * - Otherwise the year is inferred relative to `reference` (or fixed with `year`).
  *   Candidate years are validated by Luxon, so a weekday token such as "Sat"
- *   rejects years where the weekday does not line up.
+ *   rejects years where the weekday does not line up, and a candidate that only
+ *   fits far from the reference is rejected too so the caller can fall back.
  */
 export function parseDateTime(
   value: string,
@@ -56,7 +60,9 @@ export function parseDateTime(
 
     const valid = candidateYears
       .map((year) => DateTime.fromFormat(`${value} ${year}`, `${format} yyyy`, PARSE_OPTIONS))
-      .filter((parsed) => parsed.isValid);
+      .filter((parsed) => parsed.isValid)
+      .filter((parsed) => options.year !== undefined || Math.abs(parsed.diff(reference, "days").days) <= MAX_DISTANCE_DAYS)
+      .sort((a, b) => Math.abs(a.diff(reference, "days").days) - Math.abs(b.diff(reference, "days").days));
     if (valid.length === 0) continue;
 
     return valid.find((parsed) => parsed.year === inferYear(parsed.month, reference)) ?? valid[0]!;

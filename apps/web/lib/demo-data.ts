@@ -1,9 +1,8 @@
-import { VANCOUVER_TZ } from "./format";
+import { VANCOUVER_TZ, vancouverDateKey } from "./format";
 import type { ShowtimeView } from "./types";
 
 export { VANCOUVER_TZ };
 
-const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: VANCOUVER_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 const wallClockParts = new Intl.DateTimeFormat("en-CA", {
   timeZone: VANCOUVER_TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
 });
@@ -14,8 +13,8 @@ function partsOf(formatter: Intl.DateTimeFormat, date: Date): Record<string, num
 
 /** The instant that reads as `hour:minute` on the Vancouver wall clock, `dayOffset` days from `now`'s Vancouver date. */
 export function vancouverTime(dayOffset: number, hour: number, minute = 0, now = new Date()): Date {
-  const today = partsOf(dateParts, now);
-  const guess = Date.UTC(today.year!, today.month! - 1, today.day! + dayOffset, hour, minute);
+  const [year, month, day] = vancouverDateKey(now).split("-").map(Number) as [number, number, number];
+  const guess = Date.UTC(year, month - 1, day + dayOffset, hour, minute);
   const wall = partsOf(wallClockParts, new Date(guess));
   const wallAsUtc = Date.UTC(wall.year!, wall.month! - 1, wall.day!, wall.hour!, wall.minute!);
   return new Date(guess + (guess - wallAsUtc));

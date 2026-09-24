@@ -69,6 +69,12 @@ npm run typecheck
 npm run build
 ```
 
+The worker also has a repository test that runs against a real database with the migrations applied. It is skipped unless `DATABASE_URL` is set:
+
+```bash
+DATABASE_URL=postgres://user:pass@localhost:5432/vic npm test --workspace=@vic/worker
+```
+
 ## Delivery status
 
 1. System architecture and database schema — complete

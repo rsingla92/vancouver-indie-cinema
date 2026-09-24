@@ -1,5 +1,6 @@
 import { fuzzy } from "fast-fuzzy";
 import type { NormalizedTitle, RankedCandidate, TmdbMovie } from "./contracts.js";
+import { canonicalTitle as canonical } from "./text.js";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_TIMEOUT_MS = 10_000;
@@ -8,10 +9,6 @@ const TMDB_TIMEOUT_MS = 10_000;
 export const MATCH_THRESHOLD = 0.82;
 /** Minimum lead over the runner-up; closer than this is treated as ambiguous. */
 export const AMBIGUITY_MARGIN = 0.08;
-
-function canonical(value: string): string {
-  return value.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
-}
 
 export function titleSimilarity(a: string, b: string): number {
   if (canonical(a) === canonical(b)) return 1;

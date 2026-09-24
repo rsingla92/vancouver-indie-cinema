@@ -1,0 +1,95 @@
+import postgres from "postgres";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ExtractedShowtime } from "../src/contracts.js";
+import type { NormalizedTitle, RankedCandidate } from "../src/normalization/contracts.js";
+import { CinemaRepository } from "../src/normalization/repository.js";
+
+// Runs only against a database that has the migrations applied: DATABASE_URL=postgres://... npx vitest run
+const databaseUrl = process.env.DATABASE_URL;
+const suite = databaseUrl ? describe : describe.skip;
+
+const DAY_MS = 86_400_000;
+const inDays = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString();
+const TMDB_ID = 42_424_242;
+
+const item = (overrides: Partial<ExtractedShowtime> = {}): ExtractedShowtime => ({
+  venueSlug: "rio-theatre", sourceUid: "int-1", rawTitle: "Tony", startsAt: inDays(3),
+  detailUrl: "https://riotheatre.ca/movie/tony/", ticketUrl: "https://riotheatretickets.ca/events/1-tony",
+  status: "scheduled", tags: ["Q&A with director"], sourcePayload: { id: 1 }, ...overrides,
+});
+const normalized: NormalizedTitle = { coreTitle: "Tony", releaseYear: 2009, contentKind: "film", tags: ["Q&A"], confidence: 0.96, note: "" };
+const candidate: RankedCandidate = {
+  movie: { id: TMDB_ID, title: "Tony", original_title: "Tony", release_date: "2009-01-01", overview: "", poster_path: null, backdrop_path: null, genre_ids: [], popularity: 3 },
+  score: 0.95, reason: "test",
+};
+
+suite("CinemaRepository against Postgres", () => {
+  const repository = new CinemaRepository(databaseUrl);
+  const sql = postgres(databaseUrl ?? "", { max: 1 });
+  let theatreId: string;
+
+  const cleanup = async () => {
+    await sql`delete from showtimes where source_uid like 'int-%'`;
+    await sql`delete from raw_source_items where source_uid like 'int-%'`;
+    await sql`delete from movies where tmdb_id = ${TMDB_ID}`;
+  };
+  const tagsFor = async (sourceUid: string) => (await sql<{ slug: string }[]>`
+    select t.slug from showtime_tags st join tags t on t.id = st.tag_id join showtimes s on s.id = st.showtime_id
+    where s.source_uid = ${sourceUid} order by 1`).map((row) => row.slug);
+
+  beforeAll(async () => {
+    await cleanup();
+    theatreId = (await repository.findTheatreId("rio-theatre"))!;
+    expect(theatreId).toBeTruthy();
+  });
+  afterAll(async () => { await cleanup(); await repository.close(); await sql.end(); });
+
+  it("links a film, then keeps it while refreshing the showtime when a later run cannot match", async () => {
+    const first = await repository.merge({ item: item(), normalized, candidate, payloadHash: "h1", rulesVersion: "t" });
+    expect(first.status).toBe("matched");
+    expect(await tagsFor("int-1")).toEqual(["q-a", "q-a-with-director"]);
+
+    const moved = inDays(4);
+    const second = await repository.merge({
+      item: item({ startsAt: moved, status: "sold_out", ticketUrl: "https://riotheatretickets.ca/events/1-tony-late" }),
+      normalized: { ...normalized, confidence: 0.45 }, candidate: null, payloadHash: "h2", rulesVersion: "t",
+    });
+    expect(second.status).toBe("review");
+
+    const [row] = await sql<{ movie_id: string; status: string; starts_at: Date; ticket_url: string; is_active: boolean }[]>`
+      select movie_id, status, starts_at, ticket_url, is_active from showtimes where source_uid = 'int-1'`;
+    expect(row).toMatchObject({ movie_id: first.status === "matched" ? first.movieId : "", status: "sold_out", ticket_url: "https://riotheatretickets.ca/events/1-tony-late", is_active: true });
+    expect(row!.starts_at.toISOString()).toBe(new Date(moved).toISOString());
+  });
+
+  it("removes tags the source no longer mentions", async () => {
+    await repository.merge({ item: item({ tags: [] }), normalized: { ...normalized, tags: [] }, candidate, payloadHash: "h3", rulesVersion: "t" });
+    expect(await tagsFor("int-1")).toEqual([]);
+  });
+
+  it("stores an http detail link as a null source url rather than failing", async () => {
+    const result = await repository.merge({ item: item({ sourceUid: "int-http", detailUrl: "http://riotheatre.ca/movie/tony/" }), normalized, candidate, payloadHash: "h4", rulesVersion: "t" });
+    expect(result.status).toBe("matched");
+    const [raw] = await sql<{ source_url: string | null }[]>`select source_url from raw_source_items where source_uid = 'int-http'`;
+    expect(raw?.source_url).toBeNull();
+  });
+
+  it("hides a few unseen showtimes but refuses to hide most of a venue", async () => {
+    const uids = Array.from({ length: 10 }, (_, index) => `int-r${index}`);
+    for (const [index, uid] of uids.entries()) {
+      await repository.merge({ item: item({ sourceUid: uid, startsAt: inDays(5 + index) }), normalized, candidate, payloadHash: `r${index}`, rulesVersion: "t" });
+    }
+    const until = new Date(Date.now() + 60 * DAY_MS);
+
+    const small = await repository.deactivateUnseenShowtimes(theatreId, [...uids.slice(0, 8), "int-1", "int-http"], until);
+    expect(small).toMatchObject({ skipped: false, unseen: 2, deactivated: 2 });
+
+    const large = await repository.deactivateUnseenShowtimes(theatreId, uids.slice(0, 2), until);
+    expect(large.skipped).toBe(true);
+    expect(large.deactivated).toBe(0);
+    expect(large.unseen).toBeGreaterThan(large.active * 0.5);
+
+    const counts = await sql<{ active: number }[]>`select count(*)::int as active from showtimes where source_uid like 'int-r%' and is_active`;
+    expect(counts[0]?.active).toBe(8);
+  });
+});

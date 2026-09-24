@@ -20,35 +20,61 @@ describe("Rio Theatre", () => {
   const listing = { id: 350691, event: { id: 350552, title: "Tony", link: "https://riotheatre.ca/movie/tony/" }, start_time: "2026-09-22T18:30:00-07:00", extra: "", premiere: false, tickets_link: "https://riotheatretickets.ca/events/45357-tony" };
 
   it("maps the Barker REST payload without inventing an end time", () => {
-    const result = parseRioPayload([{ ...listing, end_time: "2026-09-22T18:30:00-07:00" }]);
-    expect(result[0]).toMatchObject({ sourceUid: "350691", rawTitle: "Tony", ticketUrl: "https://riotheatretickets.ca/events/45357-tony" });
-    expect(result[0]?.endsAt).toBeUndefined();
+    const { showtimes, warnings } = parseRioPayload([{ ...listing, end_time: "2026-09-22T18:30:00-07:00" }]);
+    expect(showtimes[0]).toMatchObject({ sourceUid: "350691", rawTitle: "Tony", ticketUrl: "https://riotheatretickets.ca/events/45357-tony" });
+    expect(showtimes[0]?.endsAt).toBeUndefined();
+    expect(warnings).toEqual([]);
   });
 
   it("keeps an end time only when it follows the start time", () => {
-    expect(parseRioPayload([{ ...listing, end_time: "2026-09-22T20:30:00-07:00" }])[0]?.endsAt).toBe("2026-09-22T20:30:00-07:00");
-    expect(parseRioPayload([{ ...listing, end_time: "2026-09-22T17:30:00-07:00" }])[0]?.endsAt).toBeUndefined();
+    expect(parseRioPayload([{ ...listing, end_time: "2026-09-22T20:30:00-07:00" }]).showtimes[0]?.endsAt).toBe("2026-09-22T20:30:00-07:00");
+    expect(parseRioPayload([{ ...listing, end_time: "2026-09-22T17:30:00-07:00" }]).showtimes[0]?.endsAt).toBeUndefined();
   });
 
   it("turns the premiere flag and extra text into tags", () => {
-    const [showtime] = parseRioPayload([{ ...listing, premiere: true, extra: "  Q&A with director " }]);
-    expect(showtime?.tags).toEqual(["premiere", "Q&A with director"]);
+    const { showtimes } = parseRioPayload([{ ...listing, premiere: true, extra: "  Q&A with director " }]);
+    expect(showtimes[0]?.tags).toEqual(["premiere", "Q&A with director"]);
+  });
+
+  it("skips a malformed listing with a warning instead of failing the venue", () => {
+    const { showtimes, warnings } = parseRioPayload([
+      { ...listing, tickets_link: "/events/45357-tony" },
+      { ...listing, id: 2, event: { ...listing.event, title: "" } },
+      { ...listing, id: 3 },
+    ]);
+    expect(showtimes.map((item) => item.sourceUid)).toEqual(["3"]);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(/ticketUrl/);
+    expect(() => parseRioPayload({ not: "an array" })).toThrow(/not an array/);
   });
 });
 
 describe("The Park Theatre", () => {
   it("reads the same Barker payload as the Rio under its own venue slug", () => {
-    const [showtime] = parseParkPayload([{ id: 9001, event: { id: 9000, title: "The Park Presents: Lawrence of Arabia", link: "https://www.theparktheatre.ca/movie/lawrence-of-arabia/" }, start_time: "2026-10-03T19:00:00-07:00", end_time: "", extra: "70mm", premiere: false, tickets_link: "" }]);
+    const [showtime] = parseParkPayload([{ id: 9001, event: { id: 9000, title: "The Park Presents: Lawrence of Arabia", link: "https://www.theparktheatre.ca/movie/lawrence-of-arabia/" }, start_time: "2026-10-03T19:00:00-07:00", end_time: "", extra: "70mm", premiere: false, tickets_link: "" }]).showtimes;
     expect(showtime).toMatchObject({ venueSlug: "park-theatre", sourceUid: "9001", rawTitle: "The Park Presents: Lawrence of Arabia", tags: ["70mm"] });
     expect(showtime?.ticketUrl).toBeUndefined();
   });
 });
 
 describe("The Cinematheque", () => {
+  const page = (date: string, weekday: string) => `<h1>The Samurai and the Prisoner</h1><section id="screeningDates"><a href="https://tickets.thecinematheque.ca/websales/pages/ticketsearchcriteria.aspx?evtinfo=571372~venue&">${date} <span class="dow">(${weekday})</span><span class="time pm">7:00</span></a></section>`;
+  const reference = DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" });
+
   it("extracts the Vista screening identifier and local time", () => {
-    const html = `<h1>The Samurai and the Prisoner</h1><section id="screeningDates"><a href="https://tickets.thecinematheque.ca/websales/pages/ticketsearchcriteria.aspx?evtinfo=571372~venue&">September 22 <span class="dow">(Tuesday)</span><span class="time pm">7:00</span></a></section>`;
-    const [showtime] = parseCinemathequeFilmPage(html, "https://thecinematheque.ca/films/2026/samurai-prisoner");
+    const [showtime] = parseCinemathequeFilmPage(page("September 22", "Tuesday"), "https://thecinematheque.ca/films/2026/samurai-prisoner", reference);
     expect(showtime).toMatchObject({ sourceUid: "571372", rawTitle: "The Samurai and the Prisoner", startsAt: "2026-09-22T19:00:00-07:00" });
+  });
+
+  it("dates a January screening in the next year even on a 2026 programme page", () => {
+    const december = DateTime.fromISO("2026-12-20", { zone: "America/Vancouver" });
+    const [showtime] = parseCinemathequeFilmPage(page("January 9", "Saturday"), "https://thecinematheque.ca/films/2026/samurai-prisoner", december);
+    expect(showtime?.startsAt).toBe("2027-01-09T19:00:00-08:00");
+  });
+
+  it("falls back to the date alone when the printed weekday is wrong", () => {
+    const [showtime] = parseCinemathequeFilmPage(page("September 22", "Monday"), "https://thecinematheque.ca/films/2026/samurai-prisoner", reference);
+    expect(showtime?.startsAt).toBe("2026-09-22T19:00:00-07:00");
   });
 });
 
@@ -74,19 +100,27 @@ describe("VIFF", () => {
 describe("Hollywood Theatre", () => {
   it("keeps film events and creates one record per advertised show time", () => {
     const html = `<title>Example Film at Hollywood Theatre</title><meta name="description" content="Example Film September 30, 2026 at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><p>DOORS: 6:00pm // SHOW: 7:00pm</p><a href="https://tickets.example.com/example">Get Tickets</a>`;
-    const result = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/example-film");
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ rawTitle: "Example Film", startsAt: "2026-09-30T19:00:00-07:00", ticketUrl: "https://tickets.example.com/example", tags: [] });
+    const { showtimes, warning } = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/example-film");
+    expect(showtimes).toHaveLength(1);
+    expect(warning).toBeUndefined();
+    expect(showtimes[0]).toMatchObject({ rawTitle: "Example Film", startsAt: "2026-09-30T19:00:00-07:00", ticketUrl: "https://tickets.example.com/example", tags: [] });
   });
 
   it("keeps secondary categories as tags but not the film gate itself", () => {
     const html = `<meta name="description" content="Concert Film March 1, 2027 at Hollywood Theatre"><h1 class="heading-events">Concert Film</h1><a href="/categories/film">Film</a><a href="/categories/music">Music</a><p>SHOW: 7:00pm</p>`;
-    const [showtime] = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert-film");
+    const [showtime] = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert-film").showtimes;
     expect(showtime).toMatchObject({ tags: ["music"], startsAt: "2027-03-01T19:00:00-08:00" });
   });
 
   it("excludes non-film events", () => {
     const html = `<meta name="description" content="Concert September 30, 2026 at Hollywood Theatre"><h1 class="heading-events">Concert</h1><a href="/categories/music">Music</a><p>SHOW: 7:00pm</p>`;
-    expect(parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert")).toEqual([]);
+    expect(parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert")).toEqual({ showtimes: [] });
+  });
+
+  it("warns about a film page it cannot read instead of dropping it silently", () => {
+    const noDate = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><p>SHOW: 7:00pm</p>`;
+    expect(parseHollywoodEventPage(noDate, "https://www.hollywoodtheatre.ca/events/x").warning).toMatch(/no recognisable date/);
+    const noTime = `<meta name="description" content="Example Film September 30, 2026"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><p>Doors 6pm</p>`;
+    expect(parseHollywoodEventPage(noTime, "https://www.hollywoodtheatre.ca/events/x").warning).toMatch(/no show time/);
   });
 });

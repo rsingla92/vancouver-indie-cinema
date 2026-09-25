@@ -147,6 +147,14 @@ describe("Hollywood Theatre", () => {
     expect(parseHollywoodEventPage(film("<div>October 3, 2026</div><p>Doors open 6:30pm</p>"), "https://www.hollywoodtheatre.ca/events/x").warning).toMatch(/no show time \(times on page: "[^"]*Doors open 6:30pm"\)/);
   });
 
+  it("takes the start of a running time when the show label is left blank", () => {
+    // Seen on the site: "Doors 7pm • Show" with nothing after it, and the time only in the prose.
+    const html = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><div>Thursday, October 8, 2026</div><div>Doors 7pm • Show</div><p>Join us on Thursday, October 8, from 7:00–10:00 PM for an evening of film.</p>`;
+    const { showtimes, warning } = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/x");
+    expect(warning).toBeUndefined();
+    expect(showtimes.map((showtime) => showtime.startsAt)).toEqual(["2026-10-08T19:00:00-07:00"]);
+  });
+
   it("excludes non-film events", () => {
     const html = `<meta name="description" content="Concert September 30, 2026 at Hollywood Theatre"><h1 class="heading-events">Concert</h1><a href="/categories/music">Music</a><p>SHOW: 7:00pm</p>`;
     expect(parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert")).toEqual({ showtimes: [] });

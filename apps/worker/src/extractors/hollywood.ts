@@ -29,6 +29,8 @@ const WRITTEN_DATE = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Ju
 const ISO_DATE = /\b(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/;
 /** "SHOW: 7:00pm", "Showtime 7pm", "Film starts at 7:00 PM". */
 const SHOW_TIME = /\b(?:show(?:time)?s?|screening|film|movie|feature|starts?)\s*(?:at|@|:|-|–)?\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi;
+/** "from 7:00–10:00 PM": a running time in prose, where only the end carries am/pm. */
+const TIME_RANGE = /\b(\d{1,2}(?::\d{2})?)\s*(?:[-–—]|to)\s*\d{1,2}(?::\d{2})?\s*([ap])\.?m\.?\b/gi;
 const ANY_TIME = /.{0,30}\b\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?\b.{0,10}/gi;
 
 interface EventDate {
@@ -78,8 +80,10 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
   if (!date) return { showtimes: [], warning: `${pageUrl}: film page has no recognisable date (description: "${description.slice(0, 120)}")` };
 
   const showTimes = [...bodyText.matchAll(SHOW_TIME)].map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
-  // With no labelled show time, a structured start time is the next best evidence.
-  const uniqueTimes = showTimes.length > 0 ? [...new Set(showTimes)] : date.clock ? [date.clock] : [];
+  // With no labelled show time, a structured start time is the next best evidence,
+  // then the start of a running time written in prose ("from 7:00–10:00 PM").
+  const rangeStarts = [...bodyText.matchAll(TIME_RANGE)].map((match) => `${match[1]} ${match[2]!.toLowerCase()}m`);
+  const uniqueTimes = showTimes.length > 0 ? [...new Set(showTimes)] : date.clock ? [date.clock] : rangeStarts.length > 0 ? [rangeStarts[0]!] : [];
   if (uniqueTimes.length === 0) {
     const seen = [...bodyText.matchAll(ANY_TIME)].map((match) => `"${match[0].trim()}"`).slice(0, 4);
     return { showtimes: [], warning: `${pageUrl}: film page has no show time (times on page: ${seen.join(", ") || "none"})` };

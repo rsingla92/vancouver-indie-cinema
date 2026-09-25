@@ -70,11 +70,12 @@ suite("CinemaRepository against Postgres", () => {
     expect(await tagsFor("int-1")).toEqual([]);
   });
 
-  it("stores an http detail link as a null source url rather than failing", async () => {
+  it("keeps an http detail link as the source url and prefers the https ticket link", async () => {
     const result = await repository.merge({ item: item({ sourceUid: "int-http", detailUrl: "http://riotheatre.ca/movie/tony/" }), normalized, candidate, payloadHash: "h4", rulesVersion: "t" });
     expect(result.status).toBe("matched");
     const [raw] = await sql<{ source_url: string | null }[]>`select source_url from raw_source_items where source_uid = 'int-http'`;
-    expect(raw?.source_url).toBeNull();
+    expect(raw?.source_url).toBe("http://riotheatre.ca/movie/tony/");
+    expect((await sql<{ ticket_url: string }[]>`select ticket_url from showtimes where source_uid = 'int-http'`)[0]?.ticket_url).toBe("https://riotheatretickets.ca/events/1-tony");
   });
 
   it("hides a few unseen showtimes but refuses to hide most of a venue", async () => {
@@ -106,6 +107,15 @@ suite("CinemaRepository against Postgres", () => {
     const [row] = await sql<{ movie_id: string | null; display_title: string }[]>`select movie_id, display_title from showtimes where source_uid = 'int-2'`;
     expect(row).toEqual({ movie_id: null, display_title: "Total Recall" });
     expect(await tagsFor("int-2")).toEqual(["q-a-with-director", "restoration"]);
+
+    // The Kingsway's site has no working https; its http schedule page is still a usable link.
+    const httpOnly = await repository.merge({
+      item: item({ sourceUid: "int-4", rawTitle: "Uprising", detailUrl: "http://kingswaymovies.ca/new.html", ticketUrl: undefined }),
+      normalized: { coreTitle: "Uprising", releaseYear: null, contentKind: "film", tags: [], confidence: 0.96, note: "" },
+      candidate: null, payloadHash: "h5", rulesVersion: "t",
+    });
+    expect(httpOnly).toEqual({ status: "review", showtimeId: expect.any(String) });
+    expect((await sql<{ ticket_url: string }[]>`select ticket_url from showtimes where source_uid = 'int-4'`)[0]?.ticket_url).toBe("http://kingswaymovies.ca/new.html");
 
     const skipped = await repository.merge({
       item: item({ sourceUid: "int-3", rawTitle: "Private Event" }),

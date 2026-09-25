@@ -67,6 +67,8 @@ export function tagCategory(label: string): "format" | "accessibility" | "experi
 }
 
 const httpsOrNull = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
+/** A venue whose site has no working https at all (the Kingsway) still gets its schedule page as the link; migration 007 allows it. */
+const webUrlOrNull = (url: string | undefined): string | null => (url && /^https?:\/\//.test(url) ? url : null);
 
 async function requireTheatreId(sql: Tx, slug: string): Promise<string> {
   const rows = await sql<{ id: string }[]>`select id from theatres where slug = ${slug}`;
@@ -84,7 +86,7 @@ async function upsertRawItem(sql: Tx, theatreId: string, input: MergeInput): Pro
       normalized_title, normalized_year, normalization_confidence, normalization_method,
       normalization_rules_version, normalization_output, normalization_status, tmdb_candidate_id,
       match_confidence, match_reason, resolved_at)
-    values (${theatreId}, ${input.ingestionRunId ?? null}, ${item.sourceUid}, ${item.rawTitle}, ${httpsOrNull(item.detailUrl)},
+    values (${theatreId}, ${input.ingestionRunId ?? null}, ${item.sourceUid}, ${item.rawTitle}, ${webUrlOrNull(item.detailUrl)},
       ${sql.json(payload)}, ${input.payloadHash}, ${normalized.coreTitle},
       ${normalized.releaseYear}, ${normalized.confidence}, 'deterministic', ${input.rulesVersion},
       ${sql.json(normalized)}, ${candidate ? "matched" : "review"}, ${candidate?.movie.id ?? null},
@@ -215,8 +217,9 @@ export class CinemaRepository {
   async merge(input: MergeInput): Promise<MergeResult> {
     return this.sql.begin(async (sql) => {
       const theatreId = await requireTheatreId(sql, input.item.venueSlug);
-      // The purchase CTA must be an https link; fall back to the venue's own detail page.
-      const ticketUrl = httpsOrNull(input.item.ticketUrl) ?? httpsOrNull(input.item.detailUrl);
+      // The purchase CTA must be an https link; fall back to the venue's own detail page, over http only
+      // when the venue offers nothing else.
+      const ticketUrl = httpsOrNull(input.item.ticketUrl) ?? httpsOrNull(input.item.detailUrl) ?? webUrlOrNull(input.item.detailUrl);
       const rawId = await upsertRawItem(sql, theatreId, input);
 
       if (!ticketUrl) {

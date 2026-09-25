@@ -79,6 +79,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Apply new migrations
+        run: npm run migrate --workspace=@vic/worker
       - name: Run ingestion
         # Inputs reach the shell through the environment, never through template expansion.
         env:

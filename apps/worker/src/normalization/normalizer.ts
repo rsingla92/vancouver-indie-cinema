@@ -3,7 +3,7 @@ import type { NormalizedTitle, TitleNormalizer } from "./contracts.js";
 import {
   BRACKETED_YEAR, CONNECTOR_BRACKET_PATTERN, DANGLING_CONNECTOR, DESCRIPTOR_BRACKET_PATTERN, EDGE_SEPARATORS,
   EDITION_PATTERN, EMPTY_BRACKETS, NON_FILM_PATTERNS, PREFIX_PATTERN, PROMO_SEGMENT_PATTERN, SEGMENT_SEPARATOR,
-  SERIES_PREFIX_PATTERN, SUFFIX_PATTERNS, TAG_PATTERNS, TRAILING_PROMO_PATTERN, TRAILING_YEAR,
+  SERIES_PREFIX_PATTERN, SUFFIX_PATTERNS, TAG_PATTERNS, TRAILING_PROMO_PATTERN, TRAILING_YEAR, VERSION_PATTERN,
 } from "./rules.js";
 import { canonicalTitle } from "./text.js";
 
@@ -16,7 +16,7 @@ function tidy(value: string): string {
 /** True when a piece of text carries no title, only labels, tags or edition words. */
 function isPromotionalSegment(segment: string): boolean {
   if (PROMO_SEGMENT_PATTERN.test(segment)) return true;
-  let rest = segment.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ");
+  let rest = segment.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(VERSION_PATTERN, " ");
   for (const [, pattern] of TAG_PATTERNS) rest = rest.replace(pattern, " ");
   return tidy(rest) === "";
 }
@@ -61,7 +61,7 @@ function stripSuffixes(value: string): string {
   for (const pattern of SUFFIX_PATTERNS) cleaned = cleaned.replace(pattern, "");
   for (let pass = 0; pass < 2 && TRAILING_PROMO_PATTERN.test(cleaned); pass += 1) cleaned = cleaned.replace(TRAILING_PROMO_PATTERN, "");
   for (const [, pattern] of TAG_PATTERNS) cleaned = cleaned.replace(pattern, " ");
-  return tidy(cleaned.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
+  return tidy(cleaned.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(VERSION_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
 }
 
 /**

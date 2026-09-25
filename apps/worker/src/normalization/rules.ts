@@ -4,7 +4,7 @@ import type { NormalizedTitle } from "./contracts.js";
  * Pattern tables for the deterministic title normalizer. Bump the version whenever a
  * rule changes so replayed raw items can be told apart from earlier runs.
  */
-export const NORMALIZATION_RULES_VERSION = "title-rules-v2";
+export const NORMALIZATION_RULES_VERSION = "title-rules-v3";
 
 export type Tag = NormalizedTitle["tags"][number];
 
@@ -76,6 +76,9 @@ export const CONNECTOR_BRACKET_PATTERN = /[(\[]\s*(?:\+|&|and\b|with\b|w\/)[^)\]
 
 /** "(Concert Film)", "(Documentary)": a description of the film, not part of its title. */
 export const DESCRIPTOR_BRACKET_PATTERN = /\s*[(\[]\s*(?:concert (?:film|documentary|movie)|documentary|short film|silent film)\s*[)\]]/gi;
+
+/** Montreal listings mark the language version: "(v.o.s.t.f.)", "VOSTA", "V.F.", "version originale". */
+export const VERSION_PATTERN = /\s*[(\[]?\s*(?<![\w])(?:v\.?o\.?s\.?t\.?[fa]\.?|v\.?o\.?[af]\.?|v\.?o\.?|v\.?f\.?|s\.?t\.?[fa]\.?|version\s+(?:originale|française|francaise|anglaise)(?:\s+sous-titrée(?:\s+en\s+(?:français|anglais))?)?)(?![\w])\s*[)\]]?/gi;
 
 /** Release and print descriptions: "4K", "Director's Cut", "new print". */
 export const EDITION_PATTERN = /\s*[(\[]?\s*\b(?:[24]k(?:\s+(?:digital\s+)?(?:restoration|remaster|scan|dcp|print))?|remastered|restored|new\s+restoration|director'?s\s+cut|final\s+cut|extended\s+(?:cut|edition|version)|theatrical\s+(?:cut|version)|imax|dcp|digital\s+restoration|new\s+print|archival\s+print|\d{2}mm\s+print)\b\s*[)\]]?/gi;

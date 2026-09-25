@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "ingest": "npm run build && node dist/jobs/ingest.js",
+    "migrate": "npm run build && node dist/jobs/migrate.js",
     "start": "node dist/jobs/ingest.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

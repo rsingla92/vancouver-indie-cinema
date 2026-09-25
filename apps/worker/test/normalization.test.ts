@@ -23,6 +23,14 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("The Shining - 1980")).toMatchObject({ coreTitle: "The Shining", releaseYear: 1980 });
   });
 
+  it("drops French language-version markers", () => {
+    expect(normalizer.normalize("Anatomie d'une chute (v.o.s.t.a.)").coreTitle).toBe("Anatomie d'une chute");
+    expect(normalizer.normalize("Perfect Days VOSTF").coreTitle).toBe("Perfect Days");
+    expect(normalizer.normalize("Dune : deuxième partie (V.F.)").coreTitle).toBe("Dune : deuxième partie");
+    expect(normalizer.normalize("Les Misérables - version originale sous-titrée en anglais").coreTitle).toBe("Les Misérables");
+    expect(normalizer.normalize("Volcano").coreTitle).toBe("Volcano");
+  });
+
   it("keeps numbers that belong to the title", () => {
     expect(normalizer.normalize("2001: A Space Odyssey")).toMatchObject({ coreTitle: "2001: A Space Odyssey", releaseYear: null });
     expect(normalizer.normalize("Blade Runner 2049")).toMatchObject({ coreTitle: "Blade Runner 2049", releaseYear: null });

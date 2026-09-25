@@ -35,11 +35,11 @@ npm run dev
 
 Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses labelled demo listings for visual development. `npm run build --workspace=@vic/web` writes the static site to `apps/web/out`.
 
-Apply the SQL migrations in order. The seed migrations are idempotent and must run before the worker, which resolves each venue by slug.
+`npm run migrate` applies the SQL migrations in `db/migrations/` that have not been applied yet, in order, and records them in `schema_migrations`. The ingest workflow runs it before every ingest, so a new migration on `main` reaches the database on the next run.
 
 ## Cities
 
-Every theatre carries a `city` and an IANA `timezone`, the JSON files include both, and the site shows a city picker in the dateline as soon as the data holds more than one city. Times are always shown in the theatre's own zone. Adding a city means seeding its theatres (a migration like `004_seed_park_theatre.sql`) and writing one extractor per venue under `apps/worker/src/extractors/`; nothing in the web app changes. Candidate venues for Toronto, Montreal and other Canadian cities are tracked in the repository's issues.
+Every theatre carries a `city` and an IANA `timezone`, the JSON files include both, and the site shows a city picker in the dateline as soon as the data holds more than one city. Times are always shown in the theatre's own zone. Adding a city means seeding its theatres (a migration like `006_seed_toronto_montreal_theatres.sql`, which already seeds fourteen Toronto and Montreal venues) and writing one extractor per venue under `apps/worker/src/extractors/`, then adding the venue slug to `venueSlugSchema`; nothing in the web app changes. The venues and their ticketing platforms are tracked in issues #3 (Toronto), #4 (Montreal) and #5 (other cities).
 
 ## Ingestion
 
@@ -56,11 +56,7 @@ The normalizer strips known venue prefixes, series labels, and format/event suff
 
 The site is a static export served by GitHub Pages. It is rebuilt from the database after every ingest and on every push to `main` that touches the site. Past showtimes are hidden in the browser, so a page left open stays current between builds. The database is a free Neon Postgres project. Nothing costs money.
 
-1. Create a Neon project and copy its pooled connection string (it ends in `?sslmode=require`). Apply the migrations to it:
-
-   ```bash
-   for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
-   ```
+1. Create a Neon project and copy its pooled connection string (it ends in `?sslmode=require`). The first ingest creates the tables; to do it by hand, run `DATABASE_URL=... npm run migrate`.
 
 2. Add the repository secrets `DATABASE_URL` and `TMDB_API_TOKEN`.
 3. In Settings → Pages, set the source to "GitHub Actions".

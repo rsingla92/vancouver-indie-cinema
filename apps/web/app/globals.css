@@ -74,8 +74,8 @@ section { scroll-margin-top: 8px; }
   letter-spacing: .06em;
   color: var(--ink-soft);
 }
-.city-select { display: inline-flex; align-items: center; gap: 6px; }
-.city-select select {
+.city-select, .when-select { display: inline-flex; align-items: center; gap: 6px; }
+.city-select select, .when-select select {
   padding: 2px 4px;
   font: inherit;
   color: var(--ink);

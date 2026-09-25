@@ -1,3 +1,4 @@
+import { dateKey, formatMonth } from "./format";
 import type { ShowtimeView, TheatreRef } from "./types";
 
 /** Showtimes that have not started yet as of `now`. Input order is preserved. */
@@ -42,6 +43,37 @@ export function shortSynopsis(text: string, max = 200): string {
   if (output) return output;
   const cut = clean.lastIndexOf(" ", max - 1);
   return `${clean.slice(0, cut > 0 ? cut : max - 1).trimEnd()}…`;
+}
+
+export interface DateWindow {
+  /** "7d", "30d", a "2026-10" month key, or "all". */
+  id: string;
+  label: string;
+}
+
+export const DEFAULT_WINDOW = "7d";
+const DAY_MS = 86_400_000;
+
+/** The windows a listing can be narrowed to: two rolling ranges, then each calendar month the data covers. */
+export function windowsOf(items: ShowtimeView[], timezone: string): DateWindow[] {
+  const months = [...new Set(items.map((item) => dateKey(item.startsAt, timezone).slice(0, 7)))].sort();
+  return [
+    { id: "7d", label: "Next 7 days" },
+    { id: "30d", label: "Next 30 days" },
+    ...months.map((key) => ({ id: key, label: formatMonth(key) })),
+    { id: "all", label: "All dates" },
+  ];
+}
+
+/** Whether a showtime falls in the window; rolling windows count calendar days in the venue's zone, today included. */
+export function inWindow(item: ShowtimeView, windowId: string, now: Date, timezone: string): boolean {
+  if (windowId === "all") return true;
+  const day = dateKey(item.startsAt, timezone);
+  if (windowId === "7d" || windowId === "30d") {
+    const days = windowId === "7d" ? 7 : 30;
+    return day <= dateKey(new Date(now.getTime() + (days - 1) * DAY_MS), timezone);
+  }
+  return day.startsWith(windowId);
 }
 
 /** Case-insensitive match on title or cinema name; an empty query matches everything. */

@@ -32,5 +32,11 @@ export function dateKey(value: string | Date, timeZone = VANCOUVER_TZ): string {
   return formatter("dateKey", timeZone, { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
 }
 
+/** "October 2026" for a "2026-10" key. */
+export function formatMonth(key: string): string {
+  const [year, month] = key.split("-").map(Number) as [number, number];
+  return formatter("month", "UTC", { month: "long", year: "numeric" }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
 /** Kept for callers that only ever deal with Vancouver. */
 export const vancouverDateKey = (value: string | Date): string => dateKey(value, VANCOUVER_TZ);

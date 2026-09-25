@@ -76,7 +76,7 @@ A project site is served under `/<repository>/`; the build reads that prefix fro
 
 The build also writes two JSON files next to the page:
 
-- `/api/showtimes.json`: upcoming showtimes through the end of the 14th Vancouver calendar day
+- `/api/showtimes.json`: upcoming showtimes through the end of the 14th Vancouver calendar day (the page itself carries 60 days and narrows them with the When picker)
 - `/api/today.json`: the rest of the build day in Vancouver time
 
 Both hold `{ data, meta }` where `meta.generatedAt` is the build time and `meta.demo` flags preview data.

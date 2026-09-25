@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDemoShowtimes } from "./demo-data";
-import { citiesOf, firstShowtimePerMovie, matchesQuery, shortSynopsis, theatresOf, upcoming } from "./showtimes";
+import { citiesOf, firstShowtimePerMovie, inWindow, matchesQuery, shortSynopsis, theatresOf, upcoming, windowsOf } from "./showtimes";
 
 const now = new Date("2026-09-23T12:00:00Z");
 const showtimes = getDemoShowtimes(now);
@@ -61,5 +61,26 @@ describe("shortSynopsis", () => {
     const short = shortSynopsis(sentence, 50);
     expect(short.length).toBeLessThanOrEqual(50);
     expect(short).toMatch(/^(?:word )+word…$/);
+  });
+});
+
+describe("date windows", () => {
+  const tz = "America/Vancouver";
+  const at = (iso: string) => ({ ...showtimes[0]!, startsAt: iso });
+
+  it("offers rolling ranges, each month in the data, and everything", () => {
+    const items = [at("2026-09-28T19:00:00-07:00"), at("2026-10-03T19:00:00-07:00"), at("2026-11-20T19:00:00-08:00")];
+    expect(windowsOf(items, tz).map((window) => window.label)).toEqual(["Next 7 days", "Next 30 days", "September 2026", "October 2026", "November 2026", "All dates"]);
+  });
+
+  it("counts calendar days in the venue's zone, today included", () => {
+    const tonight = new Date("2026-09-25T23:30:00-07:00");
+    expect(inWindow(at("2026-10-01T19:00:00-07:00"), "7d", tonight, tz)).toBe(true);
+    expect(inWindow(at("2026-10-02T19:00:00-07:00"), "7d", tonight, tz)).toBe(false);
+    expect(inWindow(at("2026-10-24T19:00:00-07:00"), "30d", tonight, tz)).toBe(true);
+    expect(inWindow(at("2026-10-25T19:00:00-07:00"), "30d", tonight, tz)).toBe(false);
+    expect(inWindow(at("2026-10-25T19:00:00-07:00"), "2026-10", tonight, tz)).toBe(true);
+    expect(inWindow(at("2026-11-01T19:00:00-07:00"), "2026-10", tonight, tz)).toBe(false);
+    expect(inWindow(at("2027-03-01T19:00:00-08:00"), "all", tonight, tz)).toBe(true);
   });
 });

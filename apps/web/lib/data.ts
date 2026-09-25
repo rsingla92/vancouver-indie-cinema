@@ -1,10 +1,13 @@
 import postgres from "postgres";
 import { getDemoShowtimes } from "./demo-data";
 import { VANCOUVER_TZ, vancouverDateKey } from "./format";
+import { shortSynopsis } from "./showtimes";
 import type { ShowtimeView } from "./types";
 
 export const DEFAULT_DAYS = 7;
 export const MAX_DAYS = 14;
+/** How far ahead the page lists, matching the worker's fetch horizon; the page narrows it client-side. */
+export const HORIZON_DAYS = 60;
 
 export interface ShowtimesResult {
   data: ShowtimeView[];
@@ -64,5 +67,6 @@ export async function getShowtimes(days = DEFAULT_DAYS): Promise<ShowtimesResult
     group by s.id, m.id, t.id
     order by s.starts_at asc, t.name asc`;
 
-  return { data: rows.map((row) => ({ ...row, startsAt: row.startsAt.toISOString() })), demo: false, generatedAt };
+  // Only the featured pick shows a synopsis, and only its first sentences, so the page never carries more.
+  return { data: rows.map((row) => ({ ...row, synopsis: shortSynopsis(row.synopsis, 240), startsAt: row.startsAt.toISOString() })), demo: false, generatedAt };
 }

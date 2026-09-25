@@ -8,7 +8,7 @@ import { Pick } from "./pick";
 import { useCity } from "@/hooks/use-city";
 import { useNow } from "@/hooks/use-now";
 import { VANCOUVER_TZ } from "@/lib/format";
-import { citiesOf, firstShowtimePerMovie, matchesQuery, theatresOf, upcoming } from "@/lib/showtimes";
+import { citiesOf, DEFAULT_WINDOW, firstShowtimePerMovie, inWindow, matchesQuery, theatresOf, upcoming, windowsOf } from "@/lib/showtimes";
 import type { ShowtimeView } from "@/lib/types";
 
 interface CinemaAppProps {
@@ -26,6 +26,7 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
   const cities = useMemo(() => citiesOf(initialShowtimes), [initialShowtimes]);
   const [city, setCity] = useCity(cities);
   const [venue, setVenue] = useState("all");
+  const [when, setWhen] = useState(DEFAULT_WINDOW);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<NavTab>("now-showing");
   const [pick, setPick] = useState(pickSeed);
@@ -34,9 +35,13 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
   const inCity = useMemo(() => live.filter((item) => item.theatre.city === city), [live, city]);
   const theatres = useMemo(() => theatresOf(inCity), [inCity]);
   const activeVenue = theatres.some((theatre) => theatre.slug === venue) ? venue : "all";
+  const timezone = inCity[0]?.theatre.timezone ?? VANCOUVER_TZ;
+  const windows = useMemo(() => windowsOf(inCity, timezone), [inCity, timezone]);
+  const activeWindow = windows.some((window) => window.id === when) ? when : DEFAULT_WINDOW;
   const visible = useMemo(
-    () => inCity.filter((item) => (activeVenue === "all" || item.theatre.slug === activeVenue) && matchesQuery(item, query)),
-    [inCity, activeVenue, query],
+    () => inCity.filter((item) =>
+      (activeVenue === "all" || item.theatre.slug === activeVenue) && inWindow(item, activeWindow, now, timezone) && matchesQuery(item, query)),
+    [inCity, activeVenue, activeWindow, now, timezone, query],
   );
   const films = useMemo(() => firstShowtimePerMovie(visible), [visible]);
   const featured = films.length > 0 ? films[pick % films.length] : undefined;
@@ -45,7 +50,6 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
     while (films.length > 1 && next % films.length === current % films.length) next = Math.floor(Math.random() * 1_000_000);
     return next;
   });
-  const timezone = inCity[0]?.theatre.timezone ?? VANCOUVER_TZ;
 
   return <div className="zine">
     <Masthead
@@ -56,8 +60,8 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
     <main>
       <Pick film={featured} city={city} now={now} timezone={timezone} searching={query.trim().length > 0} {...(films.length > 1 ? { onPickAnother: pickAnother } : {})} />
       <section className="listings" id="now-showing">
-        <FilmGrid films={films} theatres={theatres} venue={activeVenue} onVenueChange={setVenue} demo={demo} />
-        <ShowtimeList showtimes={visible} timezone={timezone} />
+        <FilmGrid films={films} theatres={theatres} venue={activeVenue} onVenueChange={setVenue} windows={windows} when={activeWindow} onWhenChange={setWhen} demo={demo} />
+        <ShowtimeList showtimes={visible} timezone={timezone} range={windows.find((window) => window.id === activeWindow)?.label ?? ""} />
       </section>
     </main>
     <Colophon generatedAt={generatedAt} timezone={timezone} />

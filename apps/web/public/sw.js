@@ -1,13 +1,13 @@
-/* IndieScreen service worker.
+/* Double Bill service worker.
  * - Navigations and JSON data: network first, cached copy when offline.
  * - Hashed Next.js assets: cache first (immutable).
  * - TMDB posters: stale-while-revalidate with a bounded cache.
  * Bump VERSION to drop every old cache on the next activation.
  */
-const VERSION = "v3";
-const SHELL_CACHE = `indiescreen-shell-${VERSION}`;
-const DATA_CACHE = `indiescreen-data-${VERSION}`;
-const IMAGE_CACHE = `indiescreen-images-${VERSION}`;
+const VERSION = "v4";
+const SHELL_CACHE = `doublebill-shell-${VERSION}`;
+const DATA_CACHE = `doublebill-data-${VERSION}`;
+const IMAGE_CACHE = `doublebill-images-${VERSION}`;
 const LIVE_CACHES = new Set([SHELL_CACHE, DATA_CACHE, IMAGE_CACHE]);
 // The site may live under a path prefix (a GitHub Pages project site); the worker is served from `${BASE}/sw.js`.
 const BASE = new URL(self.location.href).pathname.replace(/\/sw\.js$/, "");

@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { withBase } from "@/lib/base-path";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
+// The manifest link is added by app/manifest.ts; Next.js prefixes it with the base path itself.
 export const metadata: Metadata = {
-  title: "IndieScreen Vancouver",
-  description: "Independent cinema showtimes across Vancouver.",
-  manifest: withBase("/manifest.webmanifest"),
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
   icons: {
     icon: [
       { url: withBase("/icon.svg"), type: "image/svg+xml" },
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
     ],
     apple: withBase("/apple-touch-icon.png"),
   },
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "IndieScreen" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: SITE_NAME },
 };
 
 export const viewport: Viewport = { themeColor: "#f5f0e4", colorScheme: "light", width: "device-width", initialScale: 1, viewportFit: "cover" };

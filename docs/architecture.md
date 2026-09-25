@@ -1,4 +1,4 @@
-# Step 1 — System Architecture
+# Architecture
 
 ## Architectural shape
 
@@ -31,13 +31,14 @@ vancouver-indie-cinema/
 │   │   │   ├── api/today.json/      # The rest of the build day
 │   │   │   ├── manifest.ts          # Web App Manifest
 │   │   │   └── page.tsx             # Listing page, rendered at build time
-│   │   ├── components/              # Client UI and service-worker registration
-│   │   ├── lib/                     # Shared Postgres client, projections, demo data
+│   │   ├── components/              # Masthead, film grid, showtime list, saved films
+│   │   ├── hooks/                   # Clock, city choice, saved films (localStorage)
+│   │   ├── lib/                     # Postgres client, projections, formatting, demo data
 │   │   └── public/                  # Icons and the service worker
 │   └── worker/                      # Node.js ingestion service
 │       ├── src/
 │       │   ├── extractors/          # One venue adapter per source
-│       │   ├── normalization/       # Title rules, TMDB ranking, repository
+│       │   ├── normalization/       # Title rules and normalizer, TMDB ranking, repository
 │       │   └── jobs/ingest.ts       # Run orchestration and reconciliation
 │       └── test/                    # Vitest suites with fixture HTML/JSON
 ├── db/migrations/                   # Versioned PostgreSQL migrations and venue seeds
@@ -76,12 +77,13 @@ Important choices:
 - **Special events are modeled as tags, not a parallel event table.** A Q&A or 35mm presentation remains attached to a screening and composes naturally with other tags. A future non-film event can use `showtimes.kind = 'special_event'` with a nullable movie.
 - **Movie and showtime data are separated.** Multiple theatres can point to one TMDB-backed movie while retaining distinct times, auditoria, ticket links, and tags.
 - **Raw source evidence is retained.** Parser and normalization changes can be replayed without immediately refetching a venue.
-- **Timestamps use `timestamptz`.** Venue-local presentation uses the theatre's IANA timezone (`America/Vancouver` by default).
+- **Timestamps use `timestamptz`.** Venue-local presentation uses the theatre's IANA timezone, which travels with the theatre in the JSON files so cities in different zones can share one build.
+- **Cities are data, not code.** A theatre's `city` groups it in the UI; the city picker appears only when more than one city is present.
 - **No ticket inventory is represented.** Availability is informational and the authoritative action is always the external URL.
 
 ## PWA and caching boundary
 
-The service worker precaches the application shell and uses stale-while-revalidate for poster images. The page and JSON data files use network-first with a cached fallback, and the page shows the build time as “last updated”. Ticket URLs must never be treated as usable offline; the UI should explain that connectivity is required to continue to the theatre.
+The service worker precaches the application shell and uses stale-while-revalidate for poster images. The page and JSON data files use network-first with a cached fallback, and the page shows the build time as “last updated”. The browser hides showtimes that have already started, using its own clock, so a build from the morning still reads correctly in the evening. Ticket URLs must never be treated as usable offline; the UI should explain that connectivity is required to continue to the theatre.
 
 ## Security and operations
 
@@ -94,4 +96,4 @@ The service worker precaches the application shell and uses stale-while-revalida
 
 ## Deliberately deferred
 
-This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`. CI, the daily ingestion schedule, and the GitHub Pages deployment live in `.github/workflows/`.
+This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`. CI, the ingestion schedule (three runs a day), and the GitHub Pages deployment live in `.github/workflows/`.

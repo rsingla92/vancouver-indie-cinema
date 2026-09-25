@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { clampDays } from "./data";
 import { getDemoShowtimes, vancouverTime } from "./demo-data";
 
 const vancouverClock = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", hourCycle: "h23", hour: "2-digit", minute: "2-digit", month: "2-digit", day: "2-digit" });
@@ -22,15 +21,5 @@ describe("getDemoShowtimes", () => {
     expect(showtimes.length).toBeGreaterThan(0);
     expect(showtimes.every((item) => !Number.isNaN(Date.parse(item.startsAt)))).toBe(true);
     expect(showtimes.map((item) => item.startsAt)).toEqual([...showtimes.map((item) => item.startsAt)].sort());
-  });
-});
-
-describe("clampDays", () => {
-  it("normalizes query input", () => {
-    expect(clampDays(null)).toBe(7);
-    expect(clampDays("abc")).toBe(7);
-    expect(clampDays("0")).toBe(1);
-    expect(clampDays("3.9")).toBe(3);
-    expect(clampDays("99")).toBe(14);
   });
 });

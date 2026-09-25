@@ -1,6 +1,8 @@
 import type { ShowtimeView } from "./types";
 
-export const SAVED_KEY = "indiescreen:saved";
+export const SAVED_KEY = "doublebill:saved";
+/** Key used before the site was renamed; read once, never written. */
+const LEGACY_SAVED_KEY = "indiescreen:saved";
 
 /** A film the viewer wants to keep, stored in the browser so it survives the schedule moving on. */
 export interface SavedFilm {
@@ -45,7 +47,7 @@ export function toggleSaved(saved: SavedFilm[], film: SavedFilm): SavedFilm[] {
 
 export function readSaved(showtimes: ShowtimeView[]): SavedFilm[] {
   try {
-    return parseSaved(localStorage.getItem(SAVED_KEY), showtimes);
+    return parseSaved(localStorage.getItem(SAVED_KEY) ?? localStorage.getItem(LEGACY_SAVED_KEY), showtimes);
   } catch {
     return [];
   }

@@ -1,13 +1,24 @@
 name: Deploy site
 
+# Redeploys when the site itself changes. Data changes reach the site through the
+# ingest workflow, which deploys after every run.
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/web/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-pages.yml"
+      - ".github/workflows/pages.yml"
 
 jobs:
   deploy:
     uses: ./.github/workflows/deploy-pages.yml
     secrets: inherit
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       contents: read
       pages: write

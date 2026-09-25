@@ -1,14 +1,15 @@
 import type { MetadataRoute } from "next";
 import { withBase } from "@/lib/base-path";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
 export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: withBase("/"),
-    name: "IndieScreen Vancouver",
-    short_name: "IndieScreen",
-    description: "Vancouver independent cinema showtimes",
+    name: SITE_NAME,
+    short_name: SITE_NAME,
+    description: SITE_DESCRIPTION,
     start_url: withBase("/"),
     scope: withBase("/"),
     display: "standalone",

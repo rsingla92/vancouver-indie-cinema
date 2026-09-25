@@ -1,11 +1,16 @@
 name: Ingest showtimes
 
-# Runs once a day at 9:00 a.m. in Vancouver. GitHub schedules are UTC only, so
-# both possible UTC offsets are scheduled and the job checks the local hour.
+# Runs three times a day in Vancouver: 9 a.m., 1 p.m. and 5 p.m. GitHub schedules
+# are UTC only, so every local time is scheduled at both possible offsets and the
+# first job keeps the one that lands on a local hour in LOCAL_HOURS.
 on:
   schedule:
-    - cron: "0 16 * * *" # 9:00 a.m. PDT
-    - cron: "0 17 * * *" # 9:00 a.m. PST
+    - cron: "0 16 * * *" # 9 a.m. PDT
+    - cron: "0 17 * * *" # 9 a.m. PST
+    - cron: "0 20 * * *" # 1 p.m. PDT
+    - cron: "0 21 * * *" # 1 p.m. PST
+    - cron: "0 0 * * *"  # 5 p.m. PDT
+    - cron: "0 1 * * *"  # 5 p.m. PST
   workflow_dispatch:
     inputs:
       days:
@@ -27,20 +32,25 @@ jobs:
     env:
       EVENT_NAME: ${{ github.event_name }}
       SCHEDULE: ${{ github.event.schedule }}
+      LOCAL_HOURS: "9 13 17"
     steps:
       - id: check
         # Decide by which cron fired and the current UTC offset, not by the wall
-        # clock, so a delayed start never skips the day's run.
+        # clock, so a delayed start never skips a run.
         run: |
-          offset=$(TZ=America/Vancouver date +%z)
-          case "$EVENT_NAME:$SCHEDULE:$offset" in
-            schedule:"0 16 * * *":-0700|schedule:"0 17 * * *":-0800)
-              echo "run=true" >> "$GITHUB_OUTPUT" ;;
-            schedule:*)
-              echo "Skipping: cron '$SCHEDULE' is not the 9 a.m. run for UTC offset $offset."
-              echo "run=false" >> "$GITHUB_OUTPUT" ;;
-            *)
-              echo "run=true" >> "$GITHUB_OUTPUT" ;;
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cron_hour=$(echo "$SCHEDULE" | awk '{print $2}')
+          offset=$(TZ=America/Vancouver date +%z)          # -0700 or -0800
+          offset_hours=$((10#${offset:1:2}))
+          [ "${offset:0:1}" = "-" ] && offset_hours=$((-offset_hours))
+          local_hour=$(( (cron_hour + offset_hours + 24) % 24 ))
+          case " $LOCAL_HOURS " in
+            *" $local_hour "*) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Skipping: cron '$SCHEDULE' is $local_hour:00 in Vancouver, not one of $LOCAL_HOURS."
+               echo "run=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
   ingest:
@@ -68,13 +78,17 @@ jobs:
           if [ -n "$VENUES" ]; then set -- "$@" "--venues=$VENUES"; fi
           npm run ingest -- "$@"
 
-  # Publish the morning's schedule as soon as it is in the database. A run with
-  # item errors still deploys whatever merged; a skipped run deploys nothing.
+  # Publish whatever the run merged. Each showtime merges in its own transaction and
+  # reconciliation is guarded, so the database is consistent even after a run that
+  # reported errors; the red run stays visible in Actions.
   deploy:
     needs: [clock, ingest]
     if: always() && needs.clock.outputs.run == 'true' && needs.ingest.result != 'skipped'
     uses: ./.github/workflows/deploy-pages.yml
     secrets: inherit
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       contents: read
       pages: write

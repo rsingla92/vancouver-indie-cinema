@@ -28,13 +28,6 @@ function getSql(): ReturnType<typeof postgres> | null {
   return globalThis.__vicSql;
 }
 
-/** Clamp a user-supplied day count to a whole number within [1, MAX_DAYS]. */
-export function clampDays(value: unknown, fallback = DEFAULT_DAYS): number {
-  const parsed = typeof value === "string" || typeof value === "number" ? Number(value) : Number.NaN;
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(MAX_DAYS, Math.max(1, Math.floor(parsed)));
-}
-
 /**
  * Upcoming showtimes from now through the end of the Nth Vancouver calendar day,
  * so `days = 1` means "the rest of today" rather than the next 24 hours.
@@ -55,7 +48,7 @@ export async function getShowtimes(days = DEFAULT_DAYS): Promise<ShowtimesResult
       coalesce(m.synopsis, '') as synopsis,
       case when m.poster_path is null then '' else 'https://image.tmdb.org/t/p/w500' || m.poster_path end as "posterUrl",
       case when m.backdrop_path is null then '' else 'https://image.tmdb.org/t/p/w1280' || m.backdrop_path end as "backdropUrl",
-      json_build_object('slug', t.slug, 'name', t.name) as theatre,
+      json_build_object('slug', t.slug, 'name', t.name, 'city', t.city, 'timezone', t.timezone) as theatre,
       s.starts_at as "startsAt", s.ticket_url as "ticketUrl", s.status,
       coalesce(array_agg(tag.label order by tag.label) filter (where tag.id is not null), '{}') as tags
     from showtimes s

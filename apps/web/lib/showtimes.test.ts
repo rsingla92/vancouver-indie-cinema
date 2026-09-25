@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { getDemoShowtimes } from "./demo-data";
-import { firstShowtimePerMovie, matchesQuery } from "./showtimes";
+import { citiesOf, firstShowtimePerMovie, matchesQuery, theatresOf, upcoming } from "./showtimes";
+
+const now = new Date("2026-09-23T12:00:00Z");
+const showtimes = getDemoShowtimes(now);
+
+describe("upcoming", () => {
+  it("drops showtimes that have already started", () => {
+    const later = new Date(Date.parse(showtimes[1]!.startsAt) + 1);
+    const remaining = upcoming(showtimes, later);
+    expect(remaining).toHaveLength(showtimes.length - 2);
+    expect(remaining[0]).toBe(showtimes[2]);
+  });
+});
 
 describe("firstShowtimePerMovie", () => {
   it("keeps the earliest showtime for a film screened more than once", () => {
-    const showtimes = getDemoShowtimes(new Date("2026-09-23T12:00:00Z"));
     const perfectDays = showtimes.filter((item) => item.movieId === "perfect-days");
     expect(perfectDays.length).toBeGreaterThan(1);
 
@@ -14,8 +25,17 @@ describe("firstShowtimePerMovie", () => {
   });
 });
 
+describe("theatresOf and citiesOf", () => {
+  it("list distinct theatres in order and cities alphabetically", () => {
+    expect(theatresOf(showtimes).map((theatre) => theatre.slug)).toEqual(["viff-centre", "the-cinematheque", "rio-theatre", "park-theatre", "hollywood-theatre"]);
+    expect(citiesOf(showtimes)).toEqual(["Vancouver"]);
+    const withToronto = [...showtimes, { ...showtimes[0]!, id: "t", theatre: { slug: "revue", name: "Revue Cinema", city: "Toronto", timezone: "America/Toronto" } }];
+    expect(citiesOf(withToronto)).toEqual(["Toronto", "Vancouver"]);
+  });
+});
+
 describe("matchesQuery", () => {
-  const [item] = getDemoShowtimes(new Date("2026-09-23T12:00:00Z"));
+  const [item] = showtimes;
   it("matches title or cinema, ignoring case and surrounding whitespace", () => {
     expect(matchesQuery(item!, "")).toBe(true);
     expect(matchesQuery(item!, "  PERFECT ")).toBe(true);

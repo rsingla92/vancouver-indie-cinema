@@ -1,26 +1,36 @@
 export const VANCOUVER_TZ = "America/Vancouver";
 
-const clock = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: VANCOUVER_TZ });
-const day = new Intl.DateTimeFormat("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: VANCOUVER_TZ });
-const longDay = new Intl.DateTimeFormat("en-CA", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: VANCOUVER_TZ });
-const dateKey = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: VANCOUVER_TZ });
+const formatters = new Map<string, Intl.DateTimeFormat>();
 
-/** "6:00 PM" in Vancouver time. */
-export function formatClock(value: string | Date): string {
-  return clock.format(new Date(value)).replace(/ /g, " ");
+function formatter(kind: string, timeZone: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${kind}:${timeZone}`;
+  let cached = formatters.get(key);
+  if (!cached) {
+    cached = new Intl.DateTimeFormat(kind === "clock" ? "en-US" : "en-CA", { ...options, timeZone });
+    formatters.set(key, cached);
+  }
+  return cached;
 }
 
-/** "Wed, Sep 23" in Vancouver time. */
-export function formatDay(value: string | Date): string {
-  return day.format(new Date(value));
+/** "6:00 PM" in the given zone. */
+export function formatClock(value: string | Date, timeZone = VANCOUVER_TZ): string {
+  return formatter("clock", timeZone, { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(value)).replace(/ /g, " ");
 }
 
-/** "Wednesday, September 23, 2026" in Vancouver time. */
-export function formatLongDay(value: string | Date): string {
-  return longDay.format(new Date(value));
+/** "Wed, Sep 23" in the given zone. */
+export function formatDay(value: string | Date, timeZone = VANCOUVER_TZ): string {
+  return formatter("day", timeZone, { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
 }
 
-/** "2026-09-23": the Vancouver calendar date an instant falls on. */
-export function vancouverDateKey(value: string | Date): string {
-  return dateKey.format(new Date(value));
+/** "Wednesday, September 23, 2026" in the given zone. */
+export function formatLongDay(value: string | Date, timeZone = VANCOUVER_TZ): string {
+  return formatter("longDay", timeZone, { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(value));
 }
+
+/** "2026-09-23": the calendar date an instant falls on in the given zone. */
+export function dateKey(value: string | Date, timeZone = VANCOUVER_TZ): string {
+  return formatter("dateKey", timeZone, { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+/** Kept for callers that only ever deal with Vancouver. */
+export const vancouverDateKey = (value: string | Date): string => dateKey(value, VANCOUVER_TZ);

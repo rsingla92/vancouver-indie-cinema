@@ -1,7 +1,7 @@
 import { filenameParse } from "@ctrl/video-filename-parser";
 import type { NormalizedTitle, TitleNormalizer } from "./contracts.js";
 import {
-  BRACKETED_YEAR, CONNECTOR_BRACKET_PATTERN, DANGLING_CONNECTOR, DESCRIPTOR_BRACKET_PATTERN, EDGE_SEPARATORS,
+  BRACKETED_YEAR, CAPS_TITLE_AFTER_PREFIX_PATTERN, CONNECTOR_BRACKET_PATTERN, DANGLING_CONNECTOR, DESCRIPTOR_BRACKET_PATTERN, EDGE_SEPARATORS,
   EDITION_PATTERN, EMPTY_BRACKETS, NON_FILM_PATTERNS, PREFIX_PATTERN, PROMO_SEGMENT_PATTERN, SEGMENT_SEPARATOR,
   SERIES_PREFIX_PATTERN, SUFFIX_PATTERNS, TAG_PATTERNS, TRAILING_PROMO_PATTERN, TRAILING_YEAR, VERSION_PATTERN,
 } from "./rules.js";
@@ -48,12 +48,31 @@ function stripPrefixes(value: string): string {
       continue;
     }
     const series = cleaned.match(SERIES_PREFIX_PATTERN);
-    if (!series) break;
-    const remainder = cleaned.slice(series[0].length);
-    if (isPromotionalSegment(remainder)) break;
-    cleaned = remainder;
+    if (series) {
+      const remainder = cleaned.slice(series[0].length);
+      if (isPromotionalSegment(remainder)) break;
+      cleaned = remainder;
+      continue;
+    }
+    // "Christmas Classics: ERNEST SAVES CHRISTMAS": the series is in mixed case, the title in capitals.
+    const caps = cleaned.match(CAPS_TITLE_AFTER_PREFIX_PATTERN);
+    if (!caps || !/[a-z]/.test(caps[1]!) || isPromotionalSegment(caps[2]!)) break;
+    cleaned = caps[2]!;
   }
   return cleaned;
+}
+
+/**
+ * "Klassic Kidz: ParaNorman", "Scream Queens: Us": a short series label before
+ * the title, which nothing in the words themselves gives away. The pipeline
+ * retries a failed match with this remainder.
+ */
+export function titleAfterSeriesLabel(coreTitle: string): string | null {
+  const match = coreTitle.match(/^([^:|]{2,40}?):\s+(.{2,})$/);
+  if (!match) return null;
+  const [, label, rest] = match;
+  if (label!.trim().split(/\s+/).length > 4 || /^\d+$/.test(rest!.trim())) return null;
+  return rest!.trim();
 }
 
 function stripSuffixes(value: string): string {

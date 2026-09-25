@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExtractedShowtime } from "../src/contracts.js";
 import type { NormalizedTitle, TmdbMovie } from "../src/normalization/contracts.js";
 import { processShowtime, stablePayloadHash } from "../src/normalization/pipeline.js";
-import type { MergeInput } from "../src/normalization/repository.js";
+import type { MergeInput, MergeResult } from "../src/normalization/repository.js";
 
 const item: ExtractedShowtime = {
   venueSlug: "rio-theatre", sourceUid: "1", rawTitle: "Tony", startsAt: "2026-09-22T18:30:00-07:00",
@@ -53,6 +53,20 @@ describe("processShowtime", () => {
     const skipped = dependencies(normalized({ contentKind: "non_film" }), []);
     await processShowtime(item, skipped.deps);
     expect(skipped.merge).toHaveBeenCalledWith(expect.objectContaining({ refusal: "not searched: non_film" }));
+  });
+
+  it("retries a failed match with the title after a series label, and keeps the failure otherwise", async () => {
+    const paraNorman: TmdbMovie = { ...tmdbMovie, id: 9, title: "ParaNorman", original_title: "ParaNorman", release_date: "2012-08-17" };
+    const search = vi.fn(async (input: NormalizedTitle) => (input.coreTitle === "ParaNorman" ? [paraNorman] : []));
+    const merge = vi.fn(async (_input: MergeInput): Promise<MergeResult> => ({ status: "review", showtimeId: null }));
+    await processShowtime({ ...item, rawTitle: "Klassic Kidz: ParaNorman" }, { normalizer: { normalize: () => normalized({ coreTitle: "Klassic Kidz: ParaNorman" }) }, tmdb: { search }, repository: { merge }, rulesVersion: "test" });
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: expect.objectContaining({ movie: paraNorman }), normalized: expect.objectContaining({ coreTitle: "ParaNorman", note: expect.stringMatching(/series label dropped/) }) }));
+
+    const none = dependencies(normalized({ coreTitle: "Klassic Kidz: ParaNorman" }), []);
+    await processShowtime(item, none.deps);
+    expect(none.search).toHaveBeenCalledTimes(2);
+    expect(none.merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, normalized: expect.objectContaining({ coreTitle: "Klassic Kidz: ParaNorman" }) }));
   });
 
   it("skips TMDB for non-film and low-confidence titles", async () => {

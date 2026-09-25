@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ExtractedShowtime } from "../contracts.js";
 import type { TitleNormalizer } from "./contracts.js";
-import { DeterministicTitleNormalizer, NORMALIZATION_RULES_VERSION } from "./normalizer.js";
+import { DeterministicTitleNormalizer, NORMALIZATION_RULES_VERSION, titleAfterSeriesLabel } from "./normalizer.js";
 import { CinemaRepository, type MergeResult } from "./repository.js";
 import { confidentMatch, explainRefusal, rankCandidates, TmdbClient } from "./tmdb.js";
 
@@ -49,10 +49,23 @@ export async function processShowtime(
 ): Promise<MergeResult> {
   const fromTitle = dependencies.normalizer.normalize(item.rawTitle);
   // A year printed in the title wins; otherwise one the venue states elsewhere on the page.
-  const normalized = { ...fromTitle, releaseYear: fromTitle.releaseYear ?? item.releaseYear ?? null };
+  let normalized = { ...fromTitle, releaseYear: fromTitle.releaseYear ?? item.releaseYear ?? null };
   const eligible = normalized.contentKind === "film" && normalized.confidence >= MIN_NORMALIZATION_CONFIDENCE;
-  const ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized)) : [];
-  const candidate = eligible ? confidentMatch(ranked) : null;
+  let ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized)) : [];
+  let candidate = eligible ? confidentMatch(ranked) : null;
+
+  // "Klassic Kidz: ParaNorman" finds nothing as a whole; the part after the series label may.
+  const afterLabel = eligible && !candidate ? titleAfterSeriesLabel(normalized.coreTitle) : null;
+  if (afterLabel) {
+    const retried = { ...normalized, coreTitle: afterLabel, note: `${normalized.note}; series label dropped after the full title found no match` };
+    const rankedAgain = rankCandidates(retried, await dependencies.tmdb.search(retried));
+    const found = confidentMatch(rankedAgain);
+    if (found) {
+      normalized = retried;
+      ranked = rankedAgain;
+      candidate = found;
+    }
+  }
   const refusal = candidate ? null : eligible ? explainRefusal(ranked) : `not searched: ${normalized.contentKind === "film" ? "low normalization confidence" : normalized.contentKind}`;
 
   return dependencies.repository.merge({

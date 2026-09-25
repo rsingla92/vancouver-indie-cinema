@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { titleAfterSeriesLabel } from "../src/normalization/normalizer.js";
 import { confidentMatch, explainRefusal, rankCandidates, titleSimilarity } from "../src/normalization/tmdb.js";
 import type { NormalizedTitle, TmdbMovie } from "../src/normalization/contracts.js";
 import { DeterministicTitleNormalizer } from "../src/normalization/normalizer.js";
@@ -58,6 +59,19 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("Studio Ghibli Fest: Spirited Away").coreTitle).toBe("Spirited Away");
     expect(normalizer.normalize("Perfect Days — Vancouver Premiere").coreTitle).toBe("Perfect Days");
     expect(normalizer.normalize("Rocky Horror Picture Show (Sing-Along + Shadow Cast)")).toMatchObject({ coreTitle: "Rocky Horror Picture Show", tags: ["sing-along"] });
+  });
+
+  it("drops a mixed-case series name before a title printed in capitals", () => {
+    expect(normalizer.normalize("Destination Love: COMING TO AMERICA (1988) - New Restoration")).toMatchObject({ coreTitle: "COMING TO AMERICA", releaseYear: 1988 });
+    expect(normalizer.normalize("Christmas Classics: ERNEST SAVES CHRISTMAS (1988) – Presented on 35mm!")).toMatchObject({ coreTitle: "ERNEST SAVES CHRISTMAS", releaseYear: 1988, tags: ["35mm"] });
+    expect(normalizer.normalize("Revue Event: HOW WE ENDED US - North American Theatrical Premiere with Cast & Crew In Attendance!").coreTitle).toBe("HOW WE ENDED US");
+    // Mixed case on both sides is left alone here; the pipeline retries after the label.
+    expect(normalizer.normalize("Klassic Kidz: ParaNorman").coreTitle).toBe("Klassic Kidz: ParaNorman");
+    expect(titleAfterSeriesLabel("Klassic Kidz: ParaNorman")).toBe("ParaNorman");
+    expect(titleAfterSeriesLabel("Scream Queens: Us")).toBe("Us");
+    expect(titleAfterSeriesLabel("Mission: Impossible")).toBe("Impossible");
+    expect(titleAfterSeriesLabel("A very long series label with many words in it: Film")).toBeNull();
+    expect(titleAfterSeriesLabel("Tony")).toBeNull();
   });
 
   it("keeps titles that merely end in a series-like word", () => {

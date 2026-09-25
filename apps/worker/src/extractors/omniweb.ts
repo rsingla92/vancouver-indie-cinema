@@ -28,6 +28,18 @@ export const CARLTON_CINEMA: OmniWebVenue = { venueSlug: "carlton-cinema", path:
 
 const BASE = "https://omniwebticketing6.com";
 const MAX_DAYS = 120;
+/** The box office answers 429 to parallel requests, so every request to it waits its turn. */
+const REQUEST_GAP_MS = 400;
+
+let queue: Promise<unknown> = Promise.resolve();
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** One request at a time to omniwebticketing6.com, shared by every venue on it, with a pause between requests. */
+export function fetchOmniWeb(url: URL, fetchPage: (url: URL) => Promise<string> = fetchText): Promise<string> {
+  const turn = queue.then(() => fetchPage(url));
+  queue = turn.catch(() => undefined).then(() => sleep(REQUEST_GAP_MS));
+  return turn;
+}
 
 export function omniWebDayUrl(venue: OmniWebVenue, day: string): URL {
   return new URL(`/${venue.path}/?schdate=${day}`, BASE);
@@ -185,7 +197,7 @@ export function parseOmniWebDay(venue: OmniWebVenue, html: string): ParsedOmniWe
 export async function extractOmniWeb(venue: OmniWebVenue, range: DateRange): Promise<ExtractionBatch> {
   const start = DateTime.fromJSDate(range.start).setZone(TORONTO_TZ).toISODate()!;
   const end = DateTime.fromJSDate(range.end).setZone(TORONTO_TZ).toISODate()!;
-  const first = parseOmniWebDay(venue, await fetchText(omniWebDayUrl(venue, start)));
+  const first = parseOmniWebDay(venue, await fetchOmniWeb(omniWebDayUrl(venue, start)));
   const warnings = [...first.warnings];
   const seen = new Set(first.showtimes.map((showtime) => showtime.sourceUid));
   const showtimes = [...first.showtimes];
@@ -197,7 +209,7 @@ export async function extractOmniWeb(venue: OmniWebVenue, range: DateRange): Pro
 
   const pages = await mapWithConcurrency(days.slice(0, MAX_DAYS), 4, async (day) => {
     try {
-      return { day, parsed: parseOmniWebDay(venue, await fetchText(omniWebDayUrl(venue, day))) };
+      return { day, parsed: parseOmniWebDay(venue, await fetchOmniWeb(omniWebDayUrl(venue, day))) };
     } catch (error) {
       warnings.push(`${day}: ${error instanceof Error ? error.message : String(error)}`);
       return null;

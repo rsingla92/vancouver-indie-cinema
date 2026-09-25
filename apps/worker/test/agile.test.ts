@@ -22,8 +22,8 @@ describe("Revue Cinema", () => {
   it("reads every screening from the calendar's events array", () => {
     const { events, warnings } = parseRevueCalendar(fixture("revue-calendar.html"));
     expect(warnings).toEqual([]);
-    expect(events).toHaveLength(7);
-    expect(events[0]).toEqual({ title: "BUDDY (2026)", start: "2026-09-24 16:00:00", url: "https://revuecinema.ca/films/buddy-2026/" });
+    expect(events).toHaveLength(8);
+    expect(events[1]).toEqual({ title: "BUDDY (2026)", start: "2026-09-24 16:00:00", url: "https://revuecinema.ca/films/buddy-2026/" });
   });
 
   it("takes the film page's Agile link and builds a stable id from the film and its start", () => {

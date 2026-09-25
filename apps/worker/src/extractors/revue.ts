@@ -21,6 +21,8 @@ export interface RevueCalendarEvent {
   url: string;
 }
 
+const CLOSURE = /^\s*closed\b/i;
+
 const eventSchema = z.object({ title: z.string().min(1), start: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?$/), url: z.string().url() });
 
 /** Find the `events: [...]` literal in the calendar script; the array is JSON but sits inside JavaScript. */
@@ -98,6 +100,8 @@ export async function extractRevue(range: DateRange): Promise<ExtractionBatch> {
   const start = DateTime.fromJSDate(range.start).setZone(TORONTO_TZ).startOf("day");
   const end = DateTime.fromJSDate(range.end).setZone(TORONTO_TZ);
   const inRange = calendar.events.filter((event) => {
+    // The calendar also carries closure notices ("CLOSED FOR PRIVATE RENTAL"), which are not screenings.
+    if (CLOSURE.test(event.title)) return false;
     const when = DateTime.fromFormat(event.start.slice(0, 16), "yyyy-MM-dd HH:mm", { zone: TORONTO_TZ });
     return when.isValid && when >= start && when <= end;
   });

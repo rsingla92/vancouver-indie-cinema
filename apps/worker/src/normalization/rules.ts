@@ -4,7 +4,7 @@ import type { NormalizedTitle } from "./contracts.js";
  * Pattern tables for the deterministic title normalizer. Bump the version whenever a
  * rule changes so replayed raw items can be told apart from earlier runs.
  */
-export const NORMALIZATION_RULES_VERSION = "title-rules-v5";
+export const NORMALIZATION_RULES_VERSION = "title-rules-v6";
 
 export type Tag = NormalizedTitle["tags"][number];
 
@@ -39,7 +39,7 @@ const PROMO_LABEL =
   "(?:the )?cinematheque presents|hollywood theatre presents|double (?:feature|bill)|late (?:night|nite)|community screening|" +
   "members?['’]? (?:only )?screening|members? only|film club|cinema club|free screening|free|sneak preview|preview screening|" +
   "preview|opening night|closing night|staff picks?|new (?:[24]k )?restoration|[24]k restoration|[24]k|" +
-  "(?:vancouver|canadian|west coast|north american|world) premiere|premiere|matinee|all ages|19\\+|sold out|" +
+  "(?:vancouver|toronto|montreal|canadian|west coast|north american|world) (?:theatrical )?premiere|premiere|matinee|all ages|19\\+|sold out|" +
   "cult classics?|movie night|film night|film series|series|" +
   "\\d+(?:st|nd|rd|th)[- ]anniversary(?: (?:screening|edition|celebration|presentation))?|anniversary (?:screening|edition)";
 
@@ -53,6 +53,13 @@ export const PREFIX_PATTERN = new RegExp(`^(?:${PROMO_LABEL})\\s*[:\\-–—|]\\
  */
 export const SERIES_PREFIX_PATTERN = /^[^:|]{0,60}?\b(?:fest|festival|series|salon|presents|showcase|spotlight|retrospective|marathon)\s*:\s*/i;
 
+/**
+ * "Destination Love: COMING TO AMERICA - New Restoration": a series name in mixed
+ * case before a title the venue prints in capitals. The first group is the series,
+ * the second everything after the colon, which must open with a capitalised word.
+ */
+export const CAPS_TITLE_AFTER_PREFIX_PATTERN = /^([^:|]{2,60}?):\s+((?:[^a-z]*?\b[A-Z][A-Z0-9'’.&-]+\b)[^a-z]*.*)$/;
+
 /** "Perfect Days — Vancouver Premiere", "Moonlight (Free)" */
 export const TRAILING_PROMO_PATTERN = new RegExp(`\\s*[-–—:|(\\[]\\s*(?:${PROMO_LABEL})\\s*[)\\]]?\\s*$`, "i");
 
@@ -64,7 +71,7 @@ export const PROMO_SEGMENT_PATTERN = new RegExp(
 );
 export const SEGMENT_SEPARATOR = /\s*[|•]\s*/;
 
-const EVENT_SUFFIX = "tickets?|doors?|hosted by|presented by|with (?:director|filmmaker|guests?|special guests?|live|intro|q\\s*&\\s*a)|" +
+const EVENT_SUFFIX = "tickets?|doors?|hosted by|presented by|presented (?:on|in)\\b|with (?:director|filmmaker|guests?|special guests?|(?:the |select )?cast|live|intro|q\\s*&\\s*a)|in attendance|" +
   "in conversation|introduced by|intro(?:duction)? by|followed by|preceded by|plus\\s|q\\s*&\\s*a|q\\s+and\\s+a";
 
 /** "Title + Q&A with director", "Title w/ live score", "Title - tickets on sale", "Title (intro by ...)" */
@@ -72,6 +79,8 @@ export const SUFFIX_PATTERNS = [
   new RegExp(`\\s*\\+\\s*(?:${EVENT_SUFFIX}|with\\b|w/|discussion|intro(?:duction)?\\b|panel|talk|director|filmmaker|live\\b|pre-?show|post-?show|after-?party|reception|performance|dj\\b|guest).*$`, "i"),
   /\s+w\/\s+.*$/i,
   new RegExp(`\\s*[-–—:,]\\s*(?:${EVENT_SUFFIX}).*$`, "i"),
+  /** "Title - North American Premiere with Cast & Crew In Attendance!": once a dash-separated label starts, the title is over. */
+  new RegExp(`\\s*[-–—]\\s*(?:${PROMO_LABEL})\\b.*$`, "i"),
   new RegExp(`\\s*[(\\[]\\s*(?:${EVENT_SUFFIX})[^)\\]]*[)\\]]`, "i"),
 ];
 

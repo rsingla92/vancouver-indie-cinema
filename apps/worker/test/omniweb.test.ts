@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CARLTON_CINEMA, CINEMATHEQUE_QUEBECOISE, extractOmniWeb, parseOmniWebDay, readMovieData, readTitleLabels } from "../src/extractors/omniweb.js";
+import { CARLTON_CINEMA, CINEMATHEQUE_QUEBECOISE, extractOmniWeb, fetchOmniWeb, omniWebDayUrl, parseOmniWebDay, readMovieData, readTitleLabels } from "../src/extractors/omniweb.js";
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
 
@@ -53,6 +53,22 @@ describe("OmniWeb box office", () => {
 
   describe("extractOmniWeb", () => {
     afterEach(() => vi.unstubAllGlobals());
+
+    it("sends one request at a time to the box office, whichever venue asks", async () => {
+      let inFlight = 0;
+      let peak = 0;
+      const fetchPage = vi.fn(async (url: URL) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return url.toString();
+      });
+      const urls = ["a", "b", "c", "d"].map((day) => omniWebDayUrl(CINEMATHEQUE_QUEBECOISE, day));
+      const results = await Promise.all(urls.map((url) => fetchOmniWeb(url, fetchPage)));
+      expect(results).toEqual(urls.map((url) => url.toString()));
+      expect(peak).toBe(1);
+    });
 
     it("asks for the first day, then every listed day inside the range, and reports a day it cannot read", async () => {
       const requested: string[] = [];

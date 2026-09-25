@@ -4,7 +4,7 @@ import type { NormalizedTitle } from "./contracts.js";
  * Pattern tables for the deterministic title normalizer. Bump the version whenever a
  * rule changes so replayed raw items can be told apart from earlier runs.
  */
-export const NORMALIZATION_RULES_VERSION = "title-rules-v3";
+export const NORMALIZATION_RULES_VERSION = "title-rules-v4";
 
 export type Tag = NormalizedTitle["tags"][number];
 
@@ -81,7 +81,7 @@ export const DESCRIPTOR_BRACKET_PATTERN = /\s*[(\[]\s*(?:concert (?:film|documen
 export const VERSION_PATTERN = /\s*[(\[]?\s*(?<![\w])(?:v\.?o\.?s\.?t\.?[fa]\.?|v\.?o\.?[af]\.?|v\.?o\.?|v\.?f\.?|s\.?t\.?[fa]\.?|version\s+(?:originale|française|francaise|anglaise)(?:\s+sous-titrée(?:\s+en\s+(?:français|anglais))?)?)(?![\w])\s*[)\]]?/gi;
 
 /** Release and print descriptions: "4K", "Director's Cut", "new print". */
-export const EDITION_PATTERN = /\s*[(\[]?\s*\b(?:[24]k(?:\s+(?:digital\s+)?(?:restoration|remaster|scan|dcp|print))?|remastered|restored|new\s+restoration|director'?s\s+cut|final\s+cut|extended\s+(?:cut|edition|version)|theatrical\s+(?:cut|version)|imax|dcp|digital\s+restoration|new\s+print|archival\s+print|\d{2}mm\s+print)\b\s*[)\]]?/gi;
+export const EDITION_PATTERN = /\s*[(\[]?\s*\b(?:[24]k(?:\s+(?:digital\s+)?(?:restoration|remaster|scan|dcp|print))?|remastered|restored|new\s+restoration|director'?s\s+cut|final\s+cut|extended\s+(?:cut|edition|version)|theatrical\s+(?:cut|version)|imax|dcp|digital\s+restoration|new\s+print|archival\s+print|\d{2}mm\s+print|re-?release[ds]?|re-?issue[ds]?|revival)\b\s*[)\]]?/gi;
 
 /** Only a year the listing sets apart counts: "(1978)" or "– 1978", never "2001: A Space Odyssey". */
 export const BRACKETED_YEAR = /[(\[]\s*((?:18|19|20)\d{2})\s*[)\]]/;

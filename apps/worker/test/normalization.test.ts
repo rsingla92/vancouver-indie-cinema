@@ -44,6 +44,8 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("Anora + Q&A with director")).toMatchObject({ coreTitle: "Anora", tags: ["Q&A"] });
     expect(normalizer.normalize("Nosferatu (1922) with live score")).toMatchObject({ coreTitle: "Nosferatu", releaseYear: 1922, tags: ["live"] });
     expect(normalizer.normalize("Chungking Express [4K]").coreTitle).toBe("Chungking Express");
+    expect(normalizer.normalize("Akira (4K Re-Release)").coreTitle).toBe("Akira");
+    expect(normalizer.normalize("Suspiria (Reissue)").coreTitle).toBe("Suspiria");
     expect(normalizer.normalize("The Rio Presents: Tampopo").coreTitle).toBe("Tampopo");
     expect(normalizer.normalize("The Park Presents: Lawrence of Arabia (70mm)")).toMatchObject({ coreTitle: "Lawrence of Arabia", tags: ["70mm"] });
     expect(normalizer.normalize("Studio Ghibli Fest: Spirited Away").coreTitle).toBe("Spirited Away");
@@ -91,5 +93,12 @@ describe("TMDB matching", () => {
   it("refuses weak matches", () => {
     expect(confidentMatch(rankCandidates(input, [movie(1, "Making Sense of It All", "1999")]))).toBeNull();
     expect(confidentMatch([])).toBeNull();
+  });
+
+  it("lets a well-known film beat an obscure namesake, but not a remake with its own following", () => {
+    const akira: NormalizedTitle = { ...input, coreTitle: "Akira", releaseYear: null, tags: [] };
+    expect(confidentMatch(rankCandidates(akira, [movie(1, "Akira", "1988", 60), movie(2, "Akira", "2016", 4)]))?.movie.id).toBe(1);
+    const recall: NormalizedTitle = { ...input, coreTitle: "Total Recall", releaseYear: null, tags: [] };
+    expect(confidentMatch(rankCandidates(recall, [movie(1, "Total Recall", "1990", 40), movie(2, "Total Recall", "2012", 30)]))).toBeNull();
   });
 });

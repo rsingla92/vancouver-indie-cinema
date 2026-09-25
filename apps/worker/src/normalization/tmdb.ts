@@ -9,6 +9,8 @@ const TMDB_TIMEOUT_MS = 10_000;
 export const MATCH_THRESHOLD = 0.82;
 /** Minimum lead over the runner-up; closer than this is treated as ambiguous. */
 export const AMBIGUITY_MARGIN = 0.08;
+/** A runner-up with the same title but this many times less popular is a namesake, not an alternative. */
+export const NAMESAKE_POPULARITY_RATIO = 5;
 
 export function titleSimilarity(a: string, b: string): number {
   if (canonical(a) === canonical(b)) return 1;
@@ -29,8 +31,16 @@ export function rankCandidates(input: NormalizedTitle, movies: TmdbMovie[]): Ran
 export function confidentMatch(ranked: RankedCandidate[]): RankedCandidate | null {
   const [first, second] = ranked;
   if (!first || first.score < MATCH_THRESHOLD) return null;
-  if (second && first.score - second.score < AMBIGUITY_MARGIN) return null;
+  if (second && first.score - second.score < AMBIGUITY_MARGIN && !isNamesake(first, second)) return null;
   return first;
+}
+
+/**
+ * Same-title films differ only in popularity when the listing gives no year. A
+ * remake with a following of its own stays ambiguous; an obscure namesake does not.
+ */
+function isNamesake(leader: RankedCandidate, runnerUp: RankedCandidate): boolean {
+  return leader.movie.popularity >= NAMESAKE_POPULARITY_RATIO * Math.max(runnerUp.movie.popularity, 1);
 }
 
 export class TmdbClient {

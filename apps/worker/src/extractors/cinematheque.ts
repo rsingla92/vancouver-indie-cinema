@@ -26,7 +26,7 @@ export function parseCinemathequeFilmPage(html: string, pageUrl: string, referen
     const monthDay = cleanText(anchor.clone().find(".dow,.time").remove().end().text());
     const time = cleanText(anchor.find(".time").text());
     const period = anchor.find(".time").hasClass("pm") ? "pm" : "am";
-    const startsAt = parseScreeningDate(weekday, `${monthDay} ${time} ${period}`, now);
+    const startsAt = parseScreeningDate(weekday, monthDay, `${time} ${period}`, now);
 
     output.push(extractedShowtimeSchema.parse({
       venueSlug: "the-cinematheque",
@@ -43,7 +43,17 @@ export function parseCinemathequeFilmPage(html: string, pageUrl: string, referen
   return output;
 }
 
-function parseScreeningDate(weekday: string, value: string, reference: DateTime): DateTime {
+/** The site writes the next two days as "Today" and "Tomorrow" instead of a date. */
+const RELATIVE_DAYS: Record<string, number> = { today: 0, tonight: 0, tomorrow: 1 };
+
+function parseScreeningDate(weekday: string, monthDay: string, clock: string, reference: DateTime): DateTime {
+  const offset = RELATIVE_DAYS[monthDay.toLowerCase()];
+  if (offset !== undefined) {
+    const time = DateTime.fromFormat(clock, "h:mm a", { zone: VANCOUVER_TZ, locale: "en-CA" });
+    if (!time.isValid) throw new Error(`Unable to parse Vancouver date/time: ${monthDay} ${clock}`);
+    return reference.setZone(VANCOUVER_TZ).plus({ days: offset }).set({ hour: time.hour, minute: time.minute, second: 0, millisecond: 0 });
+  }
+  const value = `${monthDay} ${clock}`;
   if (weekday) {
     try {
       return parseDateTime(`${weekday} ${value}`, ["cccc LLLL d h:mm a", "cccc LLL d h:mm a"], { reference });

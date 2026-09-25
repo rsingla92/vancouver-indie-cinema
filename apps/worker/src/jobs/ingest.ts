@@ -144,6 +144,10 @@ async function main(argv: string[]): Promise<void> {
   }
   const venues = values.venues?.split(",").map((value) => venueSlugSchema.parse(value.trim()));
 
+  for (const name of ["DATABASE_URL", "TMDB_API_TOKEN"] as const) {
+    if (!process.env[name]) throw new Error(`${name} is not set. Add it as a repository secret, or to .env.local for a local run.`);
+  }
+
   const pipeline = createDefaultPipeline();
   try {
     const reports = await ingest(pipeline, {

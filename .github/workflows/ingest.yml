@@ -62,6 +62,17 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       TMDB_API_TOKEN: ${{ secrets.TMDB_API_TOKEN }}
     steps:
+      - name: Check secrets
+        # Fail in seconds with the secret's name instead of after a full extraction.
+        run: |
+          missing=""
+          for name in DATABASE_URL TMDB_API_TOKEN; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::The $name repository secret is not set (Settings, Secrets and variables, Actions)."
+              missing=1
+            fi
+          done
+          [ -z "$missing" ]
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

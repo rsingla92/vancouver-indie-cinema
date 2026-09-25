@@ -66,7 +66,7 @@ The site is a static export served by GitHub Pages. It is rebuilt from the datab
 3. In Settings → Pages, set the source to "GitHub Actions".
 4. Push to `main`, or run the "Deploy site to GitHub Pages" workflow by hand.
 
-The deploy workflow refuses to build when `DATABASE_URL` is missing, so a forgotten secret cannot publish the sample listings. To preview the sample data on Pages anyway, run the workflow by hand with the "demo" option.
+The deploy workflow refuses to build when `DATABASE_URL` is missing, so a forgotten secret cannot publish the sample listings, and the page build fails when the database holds no upcoming showtimes, so a broken ingest cannot publish an empty schedule. The ingest workflow checks both secrets before it starts. To preview the sample data on Pages anyway, run the workflow by hand with the "demo" option.
 
 A project site is served under `/<repository>/`; the build reads that prefix from the Pages configuration, so moving to a custom domain needs no code change. Because the site is a snapshot, same-day changes such as a screening selling out appear after the next build.
 

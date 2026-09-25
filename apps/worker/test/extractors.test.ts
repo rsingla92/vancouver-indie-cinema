@@ -72,6 +72,13 @@ describe("The Cinematheque", () => {
     expect(showtime?.startsAt).toBe("2027-01-09T19:00:00-08:00");
   });
 
+  it("reads Today and Tomorrow relative to the crawl date", () => {
+    const [today] = parseCinemathequeFilmPage(page("Today", ""), "https://thecinematheque.ca/films/2026/downpour", reference);
+    const [tomorrow] = parseCinemathequeFilmPage(page("Tomorrow", ""), "https://thecinematheque.ca/films/2026/downpour", reference);
+    expect(today?.startsAt).toBe("2026-09-21T19:00:00-07:00");
+    expect(tomorrow?.startsAt).toBe("2026-09-22T19:00:00-07:00");
+  });
+
   it("falls back to the date alone when the printed weekday is wrong", () => {
     const [showtime] = parseCinemathequeFilmPage(page("September 22", "Monday"), "https://thecinematheque.ca/films/2026/samurai-prisoner", reference);
     expect(showtime?.startsAt).toBe("2026-09-22T19:00:00-07:00");

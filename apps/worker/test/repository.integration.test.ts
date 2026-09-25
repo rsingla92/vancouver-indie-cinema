@@ -20,7 +20,7 @@ const item = (overrides: Partial<ExtractedShowtime> = {}): ExtractedShowtime => 
 const normalized: NormalizedTitle = { coreTitle: "Tony", releaseYear: 2009, contentKind: "film", tags: ["Q&A"], confidence: 0.96, note: "" };
 const candidate: RankedCandidate = {
   movie: { id: TMDB_ID, title: "Tony", original_title: "Tony", release_date: "2009-01-01", overview: "", poster_path: null, backdrop_path: null, genre_ids: [], popularity: 3 },
-  score: 0.95, reason: "test",
+  score: 0.95, similarity: 1, reason: "test",
 };
 
 suite("CinemaRepository against Postgres", () => {

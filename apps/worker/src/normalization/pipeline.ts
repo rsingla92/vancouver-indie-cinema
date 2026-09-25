@@ -17,6 +17,8 @@ export interface PipelineDependencies {
 
 export interface ProcessContext {
   ingestionRunId?: string;
+  /** TMDB languages to search in; Quebec venues add fr-CA so French titles compare against French titles. */
+  languages?: readonly string[];
 }
 
 function stableStringify(value: unknown): string {
@@ -51,14 +53,14 @@ export async function processShowtime(
   // A year printed in the title wins; otherwise one the venue states elsewhere on the page.
   let normalized = { ...fromTitle, releaseYear: fromTitle.releaseYear ?? item.releaseYear ?? null };
   const eligible = normalized.contentKind === "film" && normalized.confidence >= MIN_NORMALIZATION_CONFIDENCE;
-  let ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized)) : [];
+  let ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized, context.languages)) : [];
   let candidate = eligible ? confidentMatch(ranked) : null;
 
   // "Klassic Kidz: ParaNorman" finds nothing as a whole; the part after the series label may.
   const afterLabel = eligible && !candidate ? titleAfterSeriesLabel(normalized.coreTitle) : null;
   if (afterLabel) {
     const retried = { ...normalized, coreTitle: afterLabel, note: `${normalized.note}; series label dropped after the full title found no match` };
-    const rankedAgain = rankCandidates(retried, await dependencies.tmdb.search(retried));
+    const rankedAgain = rankCandidates(retried, await dependencies.tmdb.search(retried, context.languages));
     const found = confidentMatch(rankedAgain);
     if (found) {
       normalized = retried;

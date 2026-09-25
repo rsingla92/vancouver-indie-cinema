@@ -6,38 +6,73 @@ const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_TIMEOUT_MS = 10_000;
 
 /** Minimum blended score for an automatic link. */
-export const MATCH_THRESHOLD = 0.82;
+export const MATCH_THRESHOLD = 0.8;
 /** Minimum lead over the runner-up; closer than this is treated as ambiguous. */
 export const AMBIGUITY_MARGIN = 0.08;
 /** A runner-up with the same title but this many times less popular is a namesake, not an alternative. */
 export const NAMESAKE_POPULARITY_RATIO = 5;
 
+const LEADING_ARTICLE = /^(?:the|a|an|le|la|les|l|un|une|el|il|lo|los|las|der|die|das) /;
+
 export function titleSimilarity(a: string, b: string): number {
-  if (canonical(a) === canonical(b)) return 1;
-  return fuzzy(canonical(a), canonical(b), { useSellers: true });
+  const x = canonical(a);
+  const y = canonical(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  if (x.replace(LEADING_ARTICLE, "") === y.replace(LEADING_ARTICLE, "")) return 0.97;
+  // Sellers scores the best-matching substring, so "Fjord" would score 1 against
+  // "Jester and Fjord's Wedding"; weight it by how much of the longer title is covered.
+  const coverage = Math.min(x.length, y.length) / Math.max(x.length, y.length);
+  return Math.max(fuzzy(x, y, { useSellers: false }), fuzzy(x, y, { useSellers: true }) * coverage);
+}
+
+/** Listings print the year they know, which is often a festival or local release a year or two off TMDB's. */
+function yearAgreement(listed: number | null, movieYear: number | null): number {
+  if (listed === null) return movieYear ? 0.6 : 0.3;
+  if (movieYear === null) return 0.1;
+  const gap = Math.abs(movieYear - listed);
+  return gap === 0 ? 1 : gap === 1 ? 0.75 : gap === 2 ? 0.55 : 0.1;
 }
 
 export function rankCandidates(input: NormalizedTitle, movies: TmdbMovie[]): RankedCandidate[] {
+  const names = [input.coreTitle, ...(input.alternateTitles ?? [])];
   return movies.map((movie) => {
-    const similarity = Math.max(titleSimilarity(input.coreTitle, movie.title), titleSimilarity(input.coreTitle, movie.original_title));
+    const titles = [movie.title, movie.original_title, ...(movie.localizedTitles ?? [])];
+    const similarity = Math.max(...names.flatMap((name) => titles.map((title) => titleSimilarity(name, title))));
     const movieYear = movie.release_date ? Number(movie.release_date.slice(0, 4)) : null;
-    const yearScore = input.releaseYear === null ? 0.6 : movieYear === input.releaseYear ? 1 : movieYear && Math.abs(movieYear - input.releaseYear) === 1 ? 0.35 : 0;
+    const yearScore = yearAgreement(input.releaseYear, movieYear);
     const popularityScore = Math.min(1, Math.log10(movie.popularity + 1) / 3);
     const score = Number((similarity * 0.72 + yearScore * 0.23 + popularityScore * 0.05).toFixed(3));
-    return { movie, score, reason: `title=${similarity.toFixed(2)}, year=${yearScore.toFixed(2)}, popularity=${popularityScore.toFixed(2)}` };
+    return { movie, score, similarity, reason: `title=${similarity.toFixed(2)}, year=${yearScore.toFixed(2)}, popularity=${popularityScore.toFixed(2)}` };
   }).sort((a, b) => b.score - a.score);
 }
 
+/** A title that is exact, or exact but for a leading article. */
+const EXACT = 0.97;
+
+/**
+ * The best-scored alternative that could itself be the film: it clears the threshold,
+ * has a release date, and, when the leader has the exact title, so does it. The venue
+ * printed the title it printed; a near miss is not what they meant.
+ */
+function rival(ranked: RankedCandidate[]): RankedCandidate | undefined {
+  const [first] = ranked;
+  return ranked.slice(1).find((candidate) =>
+    candidate.score >= MATCH_THRESHOLD && candidate.movie.release_date && !(first!.similarity >= EXACT && candidate.similarity < EXACT));
+}
+
 export function confidentMatch(ranked: RankedCandidate[]): RankedCandidate | null {
-  const [first, second] = ranked;
+  const [first] = ranked;
   if (!first || first.score < MATCH_THRESHOLD) return null;
+  const second = rival(ranked);
   if (second && first.score - second.score < AMBIGUITY_MARGIN && !isNamesake(first, second)) return null;
   return first;
 }
 
 /** Why `confidentMatch` returned null, kept on the raw item for the review queue. */
 export function explainRefusal(ranked: RankedCandidate[]): string {
-  const [first, second] = ranked;
+  const [first] = ranked;
+  const second = rival(ranked);
   const describe = (candidate: RankedCandidate) =>
     `"${candidate.movie.title}" (${candidate.movie.release_date?.slice(0, 4) || "no date"}) ${candidate.score.toFixed(3)}`;
   if (!first) return "refused: TMDB returned no candidates";
@@ -57,10 +92,29 @@ function isNamesake(leader: RankedCandidate, runnerUp: RankedCandidate): boolean
 export class TmdbClient {
   constructor(private readonly token = process.env.TMDB_API_TOKEN) {}
 
-  async search(input: NormalizedTitle): Promise<TmdbMovie[]> {
+  /**
+   * Search in each language and merge by film, so a Montreal listing's French title
+   * can be compared with TMDB's French title. When the title finds nothing, the first
+   * alternate name (a bracketed original title) is tried.
+   */
+  async search(input: NormalizedTitle, languages: readonly string[] = ["en-CA"]): Promise<TmdbMovie[]> {
+    const byId = new Map<number, TmdbMovie>();
+    for (const language of languages) {
+      for (const movie of await this.query(input.coreTitle, input.releaseYear, language)) {
+        const known = byId.get(movie.id);
+        if (!known) byId.set(movie.id, movie);
+        else if (movie.title !== known.title) known.localizedTitles = [...(known.localizedTitles ?? []), movie.title];
+      }
+    }
+    const alternate = input.alternateTitles?.[0];
+    if (byId.size === 0 && alternate) return this.query(alternate, input.releaseYear, languages[0] ?? "en-CA");
+    return [...byId.values()];
+  }
+
+  private async query(title: string, year: number | null, language: string): Promise<TmdbMovie[]> {
     if (!this.token) throw new Error("TMDB_API_TOKEN is required");
-    const params = new URLSearchParams({ query: input.coreTitle, include_adult: "false", language: "en-CA" });
-    if (input.releaseYear) params.set("year", String(input.releaseYear));
+    const params = new URLSearchParams({ query: title, include_adult: "false", language });
+    if (year) params.set("year", String(year));
     const response = await fetch(`${TMDB_BASE_URL}/search/movie?${params}`, {
       headers: { Authorization: `Bearer ${this.token}`, accept: "application/json" },
       signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),

@@ -41,10 +41,16 @@ describe("processShowtime", () => {
     expect(merge.mock.calls[0]?.[0]).not.toHaveProperty("refusal");
   });
 
+  it("passes the venue's search languages to TMDB", async () => {
+    const { deps, search } = dependencies(normalized(), [tmdbMovie]);
+    await processShowtime(item, deps, { languages: ["en-CA", "fr-CA"] });
+    expect(search).toHaveBeenCalledWith(expect.anything(), ["en-CA", "fr-CA"]);
+  });
+
   it("uses the year the venue printed when the title has none, and records why a match was refused", async () => {
     const { deps, search, merge } = dependencies(normalized({ releaseYear: null }), [tmdbMovie]);
     await processShowtime({ ...item, releaseYear: 2009 }, deps);
-    expect(search).toHaveBeenCalledWith(expect.objectContaining({ releaseYear: 2009 }));
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ releaseYear: 2009 }), undefined);
     expect(merge).toHaveBeenCalledWith(expect.objectContaining({ normalized: expect.objectContaining({ releaseYear: 2009 }) }));
 
     const refused = dependencies(normalized({ releaseYear: null }), []);

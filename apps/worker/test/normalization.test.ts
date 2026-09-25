@@ -100,6 +100,81 @@ describe("deterministic title normalization", () => {
   });
 });
 
+describe("listings seen on the venues' sites", () => {
+  const normalizer = new DeterministicTitleNormalizer(() => new Date("2026-09-25T00:00:00Z"));
+  const core = (title: string) => normalizer.normalize(title).coreTitle;
+
+  it("drops presentation labels the venue tacks onto the end", () => {
+    expect(core("The Devils: 4K Restoration!")).toBe("The Devils");
+    expect(core("Thanksgiving Weekend: THE BIG CHILL (4K Restoration!)")).toBe("THE BIG CHILL");
+    expect(core("Revue Event: JIGOKU (1960) - Toronto Theatrical Premiere of New 4K Restoration!")).toBe("JIGOKU");
+    expect(core("35 on 35: SILENCE OF THE LAMBS (1991) - Presented on 35mm!")).toBe("SILENCE OF THE LAMBS");
+    expect(core("Silent Revue: FAUST - 100th Anniversary Screening!")).toBe("FAUST");
+    expect(core("Do You Like Pain? Retrospective: NIGHTBREED: The Director's Cut")).toBe("NIGHTBREED");
+    expect(normalizer.normalize("Akira (2026 Restoration)")).toMatchObject({ coreTitle: "Akira", releaseYear: null, tags: ["restoration"] });
+  });
+
+  it("drops brackets and suffixes about the event rather than the film", () => {
+    expect(normalizer.normalize("Los Ríos (Filmmakers in Attendance for Q&A)")).toMatchObject({ coreTitle: "Los Ríos", tags: ["Q&A", "guests"] });
+    expect(core("Cast Aside the Clouds (Filmmakers in Attendance for Q&A)")).toBe("Cast Aside the Clouds");
+    expect(core("Revue Event: LUNAR SWAY - Select Cast & Crew In Attendance!")).toBe("LUNAR SWAY");
+    expect(core("Ginger Snaps Screening with Q&A from Katherine Isabelle")).toBe("Ginger Snaps");
+    expect(normalizer.normalize("Dumpster Raccoon: GREASE SINGALONG AND SHADOWCAST!")).toMatchObject({ coreTitle: "GREASE", tags: ["sing-along"] });
+    expect(core("Stompbox: THE SATURDAY MORNING ALL-YOU-CAN-EAT CEREAL CARTOON PARTY (Halloween Edition!)")).toBe("THE SATURDAY MORNING ALL-YOU-CAN-EAT CEREAL CARTOON PARTY");
+    expect(normalizer.normalize("Revue Event: SORCERESS (1982) - With A Live Performance by THUNDER GLOVE!")).toMatchObject({ coreTitle: "SORCERESS", releaseYear: 1982, contentKind: "film", tags: ["live"] });
+  });
+
+  it("drops festival tags and French labels", () => {
+    expect(core("Coward: VIFF 2026")).toBe("Coward");
+    expect(core("Death Has No Master (La Muerte no Tiene Dueño): VIFF 2026")).toBe("Death Has No Master");
+    expect(core("Castration Movie Chapter iii. Junior Ghosts (OFF-VIFF 2026, West Coast Premiere)")).toBe("Castration Movie Chapter iii. Junior Ghosts");
+    expect(core("The Color of Pomegranates – Coups de coeur de l’équipe")).toBe("The Color of Pomegranates");
+    expect(core("The Good, The Bad and The Ugly: 60e anniversaire")).toBe("The Good, The Bad and The Ugly");
+  });
+
+  it("reads every spelling of the language version and keeps it as a tag", () => {
+    expect(normalizer.normalize("A Land Within (VOSTF-A)")).toMatchObject({ coreTitle: "A Land Within", tags: ["subtitled"] });
+    expect(core("Les perdants (VO-SME)")).toBe("Les perdants");
+    expect(core("Un renversement (VOF)")).toBe("Un renversement");
+    expect(normalizer.normalize("Kiki's Delivery Service (SUB) (1989)")).toMatchObject({ coreTitle: "Kiki's Delivery Service", releaseYear: 1989, tags: ["subtitled"] });
+    expect(normalizer.normalize("Kiki's Delivery Service (DUB) (1989)")).toMatchObject({ coreTitle: "Kiki's Delivery Service", tags: ["dubbed"] });
+    expect(core("Ghost in the Shell: 30th Anniversary (SUB) (1995)")).toBe("Ghost in the Shell");
+  });
+
+  it("keeps other names the listing gives the film", () => {
+    expect(normalizer.normalize("Agridulce (Bittersweet)")).toMatchObject({ coreTitle: "Agridulce", alternateTitles: ["Bittersweet"] });
+    expect(normalizer.normalize("A BIT OF LIGHT (KAMI NOUR)")).toMatchObject({ coreTitle: "A BIT OF LIGHT", alternateTitles: ["KAMI NOUR"] });
+    expect(normalizer.normalize("KEN RUSSELL’S THE DEVILS")).toMatchObject({ coreTitle: "KEN RUSSELL’S THE DEVILS", alternateTitles: ["THE DEVILS"] });
+    expect(normalizer.normalize("Warren Miller’s DAYS OFF").alternateTitles).toEqual(["DAYS OFF"]);
+    expect(normalizer.normalize("Schindler's List").alternateTitles).toBeUndefined();
+    expect(normalizer.normalize("Mike Flanagan's 'Carrie' (Episodes 1 & 2)").coreTitle).toBe("Mike Flanagan's 'Carrie' (Episodes 1 & 2)");
+  });
+
+  it("takes the first film of a double bill", () => {
+    expect(normalizer.normalize("Drunken Cinema: SCREAM (1996) + SCREAM 7 DOUBLE FEATURE!")).toMatchObject({ coreTitle: "SCREAM", releaseYear: 1996, tags: ["double bill"] });
+    expect(core("Do You Like Pain? Retrospective Double Feature : HELLRAISER (1987) - Presented on 35mm + HELLBOUND: HELLRAISER II - Presented on DCP!")).toBe("HELLRAISER");
+    expect(core("Romeo + Juliet")).toBe("Romeo + Juliet");
+  });
+
+  it("keeps typography TMDB uses", () => {
+    expect(core("8½")).toBe("8½");
+    expect(core("Doppelgängers³")).toBe("Doppelgängers³");
+  });
+
+  it("tells films with live music from gigs, and festivals from films", () => {
+    expect(normalizer.normalize("Faust w/ Live Music by Invincible Czars")).toMatchObject({ coreTitle: "Faust", contentKind: "film", tags: ["live"] });
+    expect(normalizer.normalize("Rental Event: HAYDEN Live at the Revue Cinema").contentKind).toBe("non_film");
+    expect(normalizer.normalize("CLOSED FOR PRIVATE RENTAL").contentKind).toBe("non_film");
+    expect(normalizer.normalize("The Rio Theatre Burlesque & Variety Show - Halloween Edition").contentKind).toBe("non_film");
+    expect(normalizer.normalize("Revue Event: REEL FEAR - Lecture by Alex West").contentKind).toBe("non_film");
+    expect(normalizer.normalize("EKRAN Toronto Polish Film Festival").contentKind).toBe("unknown");
+    expect(normalizer.normalize("FESTIVAL INTERNATIONAL DU FILM BLACK DE MONTRÉAL").contentKind).toBe("unknown");
+    expect(normalizer.normalize("Short Forum 2: Anthropomaxx").contentKind).toBe("unknown");
+    expect(normalizer.normalize("MODES 2").contentKind).toBe("unknown");
+    expect(normalizer.normalize("The King of Comedy").contentKind).toBe("film");
+  });
+});
+
 describe("TMDB matching", () => {
   it("treats punctuation and case as equivalent", () => expect(titleSimilarity("AMÉLIE", "Amelie")).toBe(1));
   it("selects an exact title and year", () => {
@@ -123,10 +198,43 @@ describe("TMDB matching", () => {
     expect(confidentMatch(rankCandidates(recall, [movie(1, "Total Recall", "1990", 40), movie(2, "Total Recall", "2012", 30)]))).toBeNull();
   });
 
+  it("scores a partial-title candidate by how much of it the listing covers", () => {
+    expect(titleSimilarity("Fjord", "Critical Role Live: Jester and Fjord's Wedding")).toBeLessThan(0.5);
+    expect(titleSimilarity("The Silence of the Lambs", "The Making of 'The Silence of the Lambs'")).toBeLessThan(0.75);
+    expect(titleSimilarity("Uprising", "The Uprising")).toBeGreaterThanOrEqual(0.95);
+    expect(titleSimilarity("Barry Lindon", "Barry Lyndon")).toBeGreaterThan(0.85);
+    expect(titleSimilarity("My Brother’s Wedding", "My Brother's Wedding")).toBe(1);
+  });
+
+  it("is not put off by a candidate that merely contains the title, has no date, or is itself too weak", () => {
+    const lambs: NormalizedTitle = { ...input, coreTitle: "The Silence of the Lambs", releaseYear: 1991, tags: [] };
+    expect(confidentMatch(rankCandidates(lambs, [movie(1, "The Silence of the Lambs", "1991", 80), movie(2, "The Making of 'The Silence of the Lambs'", "1991", 2)]))?.movie.id).toBe(1);
+    const saut: NormalizedTitle = { ...input, coreTitle: "Le grand saut", releaseYear: null, tags: [] };
+    const { release_date: _dropped, ...undated } = movie(1, "Le grand saut", "2020", 3);
+    expect(confidentMatch(rankCandidates(saut, [undated, movie(2, "Le Grand Saut", "2020", 3)]))?.movie.id).toBe(2);
+    const cinema: NormalizedTitle = { ...input, coreTitle: "Once Upon a Time in a Cinema", releaseYear: null, tags: [] };
+    expect(confidentMatch(rankCandidates(cinema, [movie(1, "Once Upon a Time in a Cinema", "2026", 2), movie(2, "Once upon a time in cinema !!", "2018", 1)]))?.movie.id).toBe(1);
+  });
+
+  it("forgives a year a little off, as festival and local release years are", () => {
+    const evilDead: NormalizedTitle = { ...input, coreTitle: "The Evil Dead", releaseYear: 1981, tags: [] };
+    expect(confidentMatch(rankCandidates(evilDead, [movie(1, "The Evil Dead", "1983", 30), movie(2, "Evil Dead", "2013", 40)]))?.movie.id).toBe(1);
+    const suicides: NormalizedTitle = { ...input, coreTitle: "The Virgin Suicides", releaseYear: 1999, tags: [] };
+    expect(confidentMatch(rankCandidates(suicides, [movie(1, "The Virgin Suicides", "2000", 20)]))?.movie.id).toBe(1);
+  });
+
+  it("compares alternate and localized titles too", () => {
+    const devils: NormalizedTitle = { ...input, coreTitle: "KEN RUSSELL’S THE DEVILS", releaseYear: null, tags: [], alternateTitles: ["THE DEVILS"] };
+    expect(confidentMatch(rankCandidates(devils, [movie(1, "The Devils", "1971", 20)]))?.movie.id).toBe(1);
+    const vincent: NormalizedTitle = { ...input, coreTitle: "VINCENT ET LA PROPHÉTIE DES MERS", releaseYear: null, tags: [] };
+    const whale = { ...movie(1, "The Last Whale Singer", "2026", 5), localizedTitles: ["Vincent et la prophétie des mers"] };
+    expect(confidentMatch(rankCandidates(vincent, [whale]))?.movie.id).toBe(1);
+  });
+
   it("explains a refusal", () => {
     const recall: NormalizedTitle = { ...input, coreTitle: "Total Recall", releaseYear: null, tags: [] };
     expect(explainRefusal(rankCandidates(recall, [movie(1, "Total Recall", "1990", 40), movie(2, "Total Recall", "2012", 30)]))).toMatch(/^refused: best "Total Recall" \(1990\) 0\.\d{3} and runner-up "Total Recall" \(2012\) 0\.\d{3} are within 0\.08$/);
-    expect(explainRefusal(rankCandidates(input, [movie(1, "Making Sense of It All", "1999")]))).toMatch(/^refused: best .* is below 0\.82$/);
+    expect(explainRefusal(rankCandidates(input, [movie(1, "Making Sense of It All", "1999")]))).toMatch(/^refused: best .* is below 0\.8$/);
     expect(explainRefusal([])).toBe("refused: TMDB returned no candidates");
   });
 });

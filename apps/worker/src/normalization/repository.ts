@@ -164,9 +164,13 @@ export class CinemaRepository {
     this.sql = postgres(databaseUrl, { max: 4, prepare: false });
   }
 
+  async findTheatre(slug: string): Promise<{ id: string; region: string } | null> {
+    const rows = await this.sql<{ id: string; region: string }[]>`select id, region from theatres where slug = ${slug}`;
+    return rows[0] ?? null;
+  }
+
   async findTheatreId(slug: string): Promise<string | null> {
-    const rows = await this.sql<{ id: string }[]>`select id from theatres where slug = ${slug}`;
-    return rows[0]?.id ?? null;
+    return (await this.findTheatre(slug))?.id ?? null;
   }
 
   async startRun(theatreId: string): Promise<string> {

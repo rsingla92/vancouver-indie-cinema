@@ -2,7 +2,8 @@ import { filenameParse } from "@ctrl/video-filename-parser";
 import type { NormalizedTitle, TitleNormalizer } from "./contracts.js";
 import {
   BRACKETED_YEAR, CAPS_TITLE_AFTER_PREFIX_PATTERN, CONNECTOR_BRACKET_PATTERN, DANGLING_CONNECTOR, DESCRIPTOR_BRACKET_PATTERN, EDGE_SEPARATORS,
-  EDITION_PATTERN, EMPTY_BRACKETS, NON_FILM_PATTERNS, PREFIX_PATTERN, PROMO_SEGMENT_PATTERN, SEGMENT_SEPARATOR,
+  EDITION_PATTERN, EMPTY_BRACKETS, EVENT_BRACKET_PATTERN, EVENT_PATTERNS, LANGUAGE_BRACKET_PATTERN, NON_FILM_PATTERNS, PREFIX_PATTERN,
+  PROMO_BRACKET_PATTERN, PROMO_SEGMENT_PATTERN, PROMO_SEGMENT_SUFFIX_PATTERN, SEGMENT_SEPARATOR,
   SERIES_PREFIX_PATTERN, SUFFIX_PATTERNS, TAG_PATTERNS, TRAILING_PROMO_PATTERN, TRAILING_YEAR, VERSION_PATTERN,
 } from "./rules.js";
 import { canonicalTitle } from "./text.js";
@@ -76,11 +77,43 @@ export function titleAfterSeriesLabel(coreTitle: string): string | null {
 }
 
 function stripSuffixes(value: string): string {
-  let cleaned = value;
+  let cleaned = value.replace(PROMO_BRACKET_PATTERN, " ").replace(LANGUAGE_BRACKET_PATTERN, " ").replace(VERSION_PATTERN, " ").replace(EVENT_BRACKET_PATTERN, " ");
   for (const pattern of SUFFIX_PATTERNS) cleaned = cleaned.replace(pattern, "");
+  for (let pass = 0; pass < 2 && PROMO_SEGMENT_SUFFIX_PATTERN.test(cleaned); pass += 1) cleaned = cleaned.replace(PROMO_SEGMENT_SUFFIX_PATTERN, "");
   for (let pass = 0; pass < 2 && TRAILING_PROMO_PATTERN.test(cleaned); pass += 1) cleaned = cleaned.replace(TRAILING_PROMO_PATTERN, "");
   for (const [, pattern] of TAG_PATTERNS) cleaned = cleaned.replace(pattern, " ");
-  return tidy(cleaned.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(VERSION_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
+  return tidy(cleaned.replace(EDITION_PATTERN, " ").replace(DESCRIPTOR_BRACKET_PATTERN, " ").replace(CONNECTOR_BRACKET_PATTERN, " "));
+}
+
+/** "Hellraiser + Hellbound" on a double bill: the first film stands for the screening. */
+function firstOfDoubleBill(value: string): string {
+  const separator = /\s+\+\s+/.test(value) ? /\s+\+\s+/ : /\s+&\s+/;
+  const [first] = value.split(separator);
+  return first?.trim() || value;
+}
+
+const ALTERNATE_BRACKET = /\s*[(\[]([^)\]]{3,60})[)\]]/g;
+const NOT_A_TITLE = /^\s*(?:part|partie|episodes?|season|vol\.?|volume)\b|^[\d\s.:-]+$/i;
+/** "Ken Russell's The Devils", "Warren Miller's DAYS OFF": a two- or three-word name in the possessive before the title. */
+const DIRECTOR_CREDIT = /^((?:[A-Z][\w.'’-]+\s+){1,2}[A-Z][\w.-]+)['’][sS]\s+(.{3,})$/;
+
+/**
+ * Other names the listing gives the same film. A bracketed phrase that is not a label,
+ * edition or event is usually the original-language title ("Agridulce (Bittersweet)").
+ * A director credit in the possessive may or may not be part of TMDB's title, so the
+ * bare title is offered as an alternative rather than replacing it.
+ */
+function extractAlternates(value: string): { rest: string; alternates: string[] } {
+  const alternates: string[] = [];
+  const rest = value.replace(ALTERNATE_BRACKET, (match, inner: string, offset: number) => {
+    const text = inner.trim();
+    if (offset === 0 || !/[a-z]/i.test(text) || NOT_A_TITLE.test(text) || isPromotionalSegment(text)) return match;
+    alternates.push(text);
+    return " ";
+  });
+  const credit = tidy(rest).match(DIRECTOR_CREDIT);
+  if (credit) alternates.push(credit[2]!);
+  return { rest, alternates };
 }
 
 /**
@@ -100,11 +133,16 @@ export class DeterministicTitleNormalizer implements TitleNormalizer {
 
   normalize(rawTitle: string): NormalizedTitle {
     const tags = TAG_PATTERNS.filter(([, pattern]) => pattern.test(rawTitle)).map(([tag]) => tag);
-    const contentKind = NON_FILM_PATTERNS.some((pattern) => pattern.test(rawTitle)) ? "non_film" : "film";
+    const contentKind = NON_FILM_PATTERNS.some((pattern) => pattern.test(rawTitle)) ? "non_film"
+      : EVENT_PATTERNS.some((pattern) => pattern.test(rawTitle)) ? "unknown" : "film";
 
-    const normalizedRaw = rawTitle.normalize("NFKC").replace(/\s+/g, " ").trim();
-    const { year: releaseYear, rest } = extractExplicitYear(normalizedRaw, this.now().getFullYear() + 1);
-    const coreTitle = trimReleaseSuffix(stripSuffixes(chooseSegment(stripPrefixes(rest)))) || rawTitle.trim();
+    // NFC, not NFKC: "8½" and "Doppelgängers³" are how TMDB spells them too.
+    const normalizedRaw = rawTitle.normalize("NFC").replace(/\s+/g, " ").trim();
+    const { year: releaseYear, rest: dated } = extractExplicitYear(normalizedRaw, this.now().getFullYear() + 1);
+    // On a double bill the first film stands for the screening; split before any label rule can misread the join.
+    const rest = tags.includes("double bill") ? firstOfDoubleBill(dated) : dated;
+    const { rest: withoutAlternates, alternates } = extractAlternates(chooseSegment(stripPrefixes(rest)));
+    const coreTitle = trimReleaseSuffix(stripSuffixes(withoutAlternates)) || rawTitle.trim();
 
     const changed = canonicalTitle(coreTitle) !== canonicalTitle(rawTitle);
     return {
@@ -112,6 +150,7 @@ export class DeterministicTitleNormalizer implements TitleNormalizer {
       releaseYear,
       contentKind,
       tags: [...new Set(tags)],
+      ...(alternates.length > 0 ? { alternateTitles: alternates.map((title) => tidy(stripSuffixes(title))).filter(Boolean) } : {}),
       confidence: contentKind === "non_film" ? 0.98 : coreTitle.length >= 2 ? (changed ? 0.9 : 0.96) : 0.45,
       note: changed ? "Deterministic cleanup removed promotional or format text" : "Title used without promotional cleanup",
     };

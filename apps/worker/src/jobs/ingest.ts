@@ -10,7 +10,10 @@ export const DEFAULT_HORIZON_DAYS = 60;
 const MAX_HORIZON_DAYS = 120;
 const DAY_MS = 86_400_000;
 
-export type IngestRepository = Pick<CinemaRepository, "merge" | "findTheatreId" | "startRun" | "finishRun" | "deactivateUnseenShowtimes">;
+export type IngestRepository = Pick<CinemaRepository, "merge" | "findTheatre" | "startRun" | "finishRun" | "deactivateUnseenShowtimes">;
+
+/** Quebec venues print French titles, which TMDB only returns in French. */
+export const searchLanguagesFor = (region: string): readonly string[] => (region === "QC" ? ["en-CA", "fr-CA"] : ["en-CA"]);
 export type IngestDependencies = Omit<PipelineDependencies, "repository"> & { repository: IngestRepository };
 
 export interface IngestOptions {
@@ -49,11 +52,13 @@ export async function ingestVenue(venueSlug: VenueSlug, dependencies: IngestDepe
   const range: DateRange = { start: now, end: new Date(now.getTime() + (options.days ?? DEFAULT_HORIZON_DAYS) * DAY_MS) };
   const report: VenueIngestReport = { venueSlug, runId: null, status: "failed", fetched: 0, matched: 0, review: 0, deactivated: 0, reconciliationSkipped: false, warnings: [], errors: [] };
 
-  const theatreId = await dependencies.repository.findTheatreId(venueSlug);
-  if (!theatreId) {
+  const theatre = await dependencies.repository.findTheatre(venueSlug);
+  if (!theatre) {
     report.errors.push(`theatre "${venueSlug}" is not seeded; apply the seed migrations in db/migrations`);
     return report;
   }
+  const theatreId = theatre.id;
+  const languages = searchLanguagesFor(theatre.region);
 
   const runId = await dependencies.repository.startRun(theatreId);
   report.runId = runId;
@@ -73,7 +78,7 @@ export async function ingestVenue(venueSlug: VenueSlug, dependencies: IngestDepe
 
     for (const item of batch.showtimes) {
       try {
-        const result = await processShowtime(item, dependencies, { ingestionRunId: runId });
+        const result = await processShowtime(item, dependencies, { ingestionRunId: runId, languages });
         if (result.status === "matched") report.matched += 1;
         else report.review += 1;
       } catch (error) {

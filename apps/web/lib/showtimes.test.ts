@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDemoShowtimes } from "./demo-data";
-import { citiesOf, firstShowtimePerMovie, matchesQuery, theatresOf, upcoming } from "./showtimes";
+import { citiesOf, firstShowtimePerMovie, matchesQuery, shortSynopsis, theatresOf, upcoming } from "./showtimes";
 
 const now = new Date("2026-09-23T12:00:00Z");
 const showtimes = getDemoShowtimes(now);
@@ -41,5 +41,25 @@ describe("matchesQuery", () => {
     expect(matchesQuery(item!, "  PERFECT ")).toBe(true);
     expect(matchesQuery(item!, "viff")).toBe(true);
     expect(matchesQuery(item!, "shining")).toBe(false);
+  });
+});
+
+describe("shortSynopsis", () => {
+  const long = "When Lord Murashige rises up against the tyrannical Oda, he finds himself besieged within the walls of his own castle. Isolated, he is confronted with a series of mysterious crimes that shatter the fragile order of his court, plunging the fortress into fear and suspicion. With Oda's army closing in, Murashige must outwit his enemies.";
+
+  it("returns a short synopsis unchanged", () => {
+    expect(shortSynopsis("A quiet film.")).toBe("A quiet film.");
+  });
+
+  it("keeps whole sentences that fit", () => {
+    expect(shortSynopsis(long)).toBe("When Lord Murashige rises up against the tyrannical Oda, he finds himself besieged within the walls of his own castle.");
+    expect(shortSynopsis(long, 300)).toMatch(/suspicion\.$/);
+  });
+
+  it("cuts a single long sentence at a word", () => {
+    const sentence = "word ".repeat(80).trim();
+    const short = shortSynopsis(sentence, 50);
+    expect(short.length).toBeLessThanOrEqual(50);
+    expect(short).toMatch(/^(?:word )+word…$/);
   });
 });

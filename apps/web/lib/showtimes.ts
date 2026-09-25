@@ -28,6 +28,22 @@ export function citiesOf(items: ShowtimeView[]): string[] {
   return [...new Set(items.map((item) => item.theatre.city))].sort((a, b) => a.localeCompare(b));
 }
 
+/** Whole sentences up to about `max` characters; a single sentence longer than that is cut at a word. */
+export function shortSynopsis(text: string, max = 200): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const sentences = clean.match(/[^.!?]+[.!?]+["')\]]*(?=\s|$)/g) ?? [];
+  let output = "";
+  for (const sentence of sentences) {
+    const next = `${output} ${sentence.trim()}`.trim();
+    if (next.length > max) break;
+    output = next;
+  }
+  if (output) return output;
+  const cut = clean.lastIndexOf(" ", max - 1);
+  return `${clean.slice(0, cut > 0 ? cut : max - 1).trimEnd()}…`;
+}
+
 /** Case-insensitive match on title or cinema name; an empty query matches everything. */
 export function matchesQuery(item: ShowtimeView, query: string): boolean {
   const needle = query.trim().toLowerCase();

@@ -5,16 +5,17 @@ import type { ShowtimeView } from "@/lib/types";
 
 interface TonightProps {
   film: ShowtimeView | undefined;
+  city: string;
   now: Date;
   timezone: string;
   searching: boolean;
 }
 
 /** The featured screening: the next film to start in the chosen city. */
-export function Tonight({ film, now, timezone, searching }: TonightProps) {
+export function Tonight({ film, city, now, timezone, searching }: TonightProps) {
   if (!film) {
     return <section className="tonight" id="tonight" aria-labelledby="tonight-title">
-      <div className="tonight-label"><Stamp>Vancouver</Stamp></div>
+      <div className="tonight-label"><Stamp>{city}</Stamp></div>
       <h1 id="tonight-title">No films found</h1>
       <p className="blurb">{searching ? "Nothing matches your search." : "No upcoming screenings."}</p>
     </section>;

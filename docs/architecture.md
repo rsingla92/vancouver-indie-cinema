@@ -31,8 +31,8 @@ vancouver-indie-cinema/
 │   │   │   ├── api/today.json/      # The rest of the build day
 │   │   │   ├── manifest.ts          # Web App Manifest
 │   │   │   └── page.tsx             # Listing page, rendered at build time
-│   │   ├── components/              # Masthead, film grid, showtime list, saved films
-│   │   ├── hooks/                   # Clock, city choice, saved films (localStorage)
+│   │   ├── components/              # Masthead, tonight, film grid, showtime list
+│   │   ├── hooks/                   # Clock and city choice
 │   │   ├── lib/                     # Postgres client, projections, formatting, demo data
 │   │   └── public/                  # Icons and the service worker
 │   └── worker/                      # Node.js ingestion service

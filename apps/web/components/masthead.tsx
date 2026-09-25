@@ -2,11 +2,10 @@ import { formatClock, formatLongDay } from "@/lib/format";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import type { TheatreRef } from "@/lib/types";
 
-type NavTab = "tonight" | "showtimes" | "saved";
+type NavTab = "tonight" | "showtimes";
 const NAV: ReadonlyArray<{ id: NavTab; href: string; label: string }> = [
   { id: "tonight", href: "#tonight", label: "Now playing" },
   { id: "showtimes", href: "#showtimes", label: "Schedule" },
-  { id: "saved", href: "#saved", label: "Saved" },
 ];
 
 interface MastheadProps {

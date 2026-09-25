@@ -39,7 +39,7 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt }: CinemaAppProp
     [inCity, activeVenue, query],
   );
   const films = useMemo(() => firstShowtimePerMovie(visible), [visible]);
-  const nextShowtime = useMemo(() => new Map(firstShowtimePerMovie(live).map((item) => [item.movieId, item])), [live]);
+  const nextShowtime = useMemo(() => new Map(firstShowtimePerMovie(inCity).map((item) => [item.movieId, item])), [inCity]);
   const timezone = inCity[0]?.theatre.timezone ?? VANCOUVER_TZ;
 
   return <div className="zine">

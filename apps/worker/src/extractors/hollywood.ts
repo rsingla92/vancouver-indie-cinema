@@ -26,12 +26,17 @@ const MONTHS: Record<string, string> = {
   aug: "August", sep: "September", sept: "September", oct: "October", nov: "November", dec: "December",
 };
 const WRITTEN_DATE = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i;
-const ISO_DATE = /\b(\d{4}-\d{2}-\d{2})\b/;
+const ISO_DATE = /\b(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/;
+/** "SHOW: 7:00pm", "Showtime 7pm", "Film starts at 7:00 PM". */
+const SHOW_TIME = /\b(?:show(?:time)?s?|screening|film|movie|feature|starts?)\s*(?:at|@|:|-|–)?\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi;
+const ANY_TIME = /.{0,30}\b\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?\b.{0,10}/gi;
 
 interface EventDate {
   /** "2026-10-03", "October 3 2026" or "October 3". */
   text: string;
   format: string;
+  /** 24-hour start time when the structured date carried one. */
+  clock?: string;
 }
 
 /**
@@ -46,7 +51,7 @@ function findEventDate($: CheerioAPI, description: string, bodyText: string): Ev
   ];
   for (const text of structured) {
     const iso = text.match(ISO_DATE);
-    if (iso) return { text: iso[1]!, format: "yyyy-MM-dd" };
+    if (iso) return { text: iso[1]!, format: "yyyy-MM-dd", ...(iso[2] ? { clock: iso[2] } : {}) };
   }
   for (const text of [description, $("meta[property='og:description']").attr("content") ?? "", bodyText]) {
     const match = text.match(WRITTEN_DATE);
@@ -72,17 +77,21 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
   const date = findEventDate($, description, bodyText);
   if (!date) return { showtimes: [], warning: `${pageUrl}: film page has no recognisable date (description: "${description.slice(0, 120)}")` };
 
-  const showTimes = [...bodyText.matchAll(/\bSHOW\s*:\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi)]
-    .map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
-  const uniqueTimes = [...new Set(showTimes)];
-  if (uniqueTimes.length === 0) return { showtimes: [], warning: `${pageUrl}: film page has no show time` };
+  const showTimes = [...bodyText.matchAll(SHOW_TIME)].map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
+  // With no labelled show time, a structured start time is the next best evidence.
+  const uniqueTimes = showTimes.length > 0 ? [...new Set(showTimes)] : date.clock ? [date.clock] : [];
+  if (uniqueTimes.length === 0) {
+    const seen = [...bodyText.matchAll(ANY_TIME)].map((match) => `"${match[0].trim()}"`).slice(0, 4);
+    return { showtimes: [], warning: `${pageUrl}: film page has no show time (times on page: ${seen.join(", ") || "none"})` };
+  }
 
   const ticketAnchor = $("a").filter((_, element) => /(?:get|buy)\s*tickets/i.test(cleanText($(element).text()))).first();
   const ticketHref = ticketAnchor.attr("href");
   const slug = new URL(pageUrl).pathname.split("/").filter(Boolean).at(-1)!;
 
   const showtimes = uniqueTimes.map((time, index) => {
-    const startsAt = parseDateTime(`${date.text} ${time}`, [`${date.format} h:mm a`, `${date.format} h a`], reference ? { reference } : {});
+    const formats = /[ap]m$/i.test(time) ? [`${date.format} h:mm a`, `${date.format} h a`] : [`${date.format} HH:mm`];
+    const startsAt = parseDateTime(`${date.text} ${time}`, formats, reference ? { reference } : {});
     return extractedShowtimeSchema.parse({
       venueSlug: "hollywood-theatre",
       sourceUid: `${slug}:${index}:${startsAt.toISO()}`,

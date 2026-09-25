@@ -67,3 +67,15 @@ jobs:
           set -- "--days=$DAYS"
           if [ -n "$VENUES" ]; then set -- "$@" "--venues=$VENUES"; fi
           npm run ingest -- "$@"
+
+  # Publish the morning's schedule as soon as it is in the database. A run with
+  # item errors still deploys whatever merged; a skipped run deploys nothing.
+  deploy:
+    needs: [clock, ingest]
+    if: always() && needs.clock.outputs.run == 'true' && needs.ingest.result != 'skipped'
+    uses: ./.github/workflows/deploy-pages.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

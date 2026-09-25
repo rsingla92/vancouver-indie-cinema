@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { withBase } from "@/lib/base-path";
 
 export function ServiceWorkerRegister() {
   useEffect(() => {
@@ -11,7 +12,7 @@ export function ServiceWorkerRegister() {
       return;
     }
 
-    const register = () => { void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined); };
+    const register = () => { void navigator.serviceWorker.register(withBase("/sw.js"), { scope: withBase("/") }).catch(() => undefined); };
     if (document.readyState === "complete") register();
     else window.addEventListener("load", register, { once: true });
     return () => window.removeEventListener("load", register);

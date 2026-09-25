@@ -51,7 +51,7 @@ export async function ingestVenue(venueSlug: VenueSlug, dependencies: IngestDepe
 
   const theatreId = await dependencies.repository.findTheatreId(venueSlug);
   if (!theatreId) {
-    report.errors.push(`theatre "${venueSlug}" is not seeded; apply supabase/migrations/003_seed_theatres.sql`);
+    report.errors.push(`theatre "${venueSlug}" is not seeded; apply db/migrations/003_seed_theatres.sql`);
     return report;
   }
 

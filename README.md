@@ -8,9 +8,10 @@ The end-to-end MVP includes source extraction, deterministic title normalization
 
 ## Stack
 
-- Next.js App Router, React, TypeScript, Tailwind CSS
-- Supabase PostgreSQL
-- Node.js ingestion worker
+- Next.js App Router as a static export, React, TypeScript, Tailwind CSS
+- Neon PostgreSQL (free tier)
+- Node.js ingestion worker on GitHub Actions
+- GitHub Pages for hosting
 - TMDB for canonical movie metadata
 - `@ctrl/video-filename-parser` as a guarded final pass for release-style suffixes
 - `fast-fuzzy` for deterministic title similarity
@@ -20,9 +21,9 @@ The end-to-end MVP includes source extraction, deterministic title normalization
 
 - [`docs/architecture.md`](docs/architecture.md): boundaries, data flow, folder structure, and design decisions
 - [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md): source investigation and Network-tab capture protocol
-- [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql): relational schema
-- [`supabase/migrations/002_normalization_pipeline.sql`](supabase/migrations/002_normalization_pipeline.sql): match-review state and read policies
-- [`supabase/migrations/003_seed_theatres.sql`](supabase/migrations/003_seed_theatres.sql) and [`004_seed_park_theatre.sql`](supabase/migrations/004_seed_park_theatre.sql): the venues the worker ingests
+- [`db/migrations/001_initial_schema.sql`](db/migrations/001_initial_schema.sql): relational schema
+- [`db/migrations/002_normalization_pipeline.sql`](db/migrations/002_normalization_pipeline.sql): match-review state and read policies
+- [`db/migrations/003_seed_theatres.sql`](db/migrations/003_seed_theatres.sql) and [`004_seed_park_theatre.sql`](db/migrations/004_seed_park_theatre.sql): the venues the worker ingests
 
 ## Local setup
 
@@ -32,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses labelled demo listings for visual development.
+Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses labelled demo listings for visual development. `npm run build --workspace=@vic/web` writes the static site to `apps/web/out`.
 
 Apply the SQL migrations in order. The seed migrations are idempotent and must run before the worker, which resolves each venue by slug.
 
@@ -47,19 +48,36 @@ For each venue the job records an `ingestion_runs` row, fetches the schedule, no
 
 The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
 
+## Hosting
+
+The site is a static export served by GitHub Pages. It is rebuilt from the database after every ingest and on every push to `main`, so it always shows the morning's schedule. The database is a free Neon Postgres project. Nothing costs money.
+
+1. Create a Neon project and copy its pooled connection string (it ends in `?sslmode=require`). Apply the migrations to it:
+
+   ```bash
+   for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+   ```
+
+2. Add the repository secrets `DATABASE_URL` and `TMDB_API_TOKEN`.
+3. In Settings → Pages, set the source to "GitHub Actions".
+4. Push to `main`, or run the "Deploy site to GitHub Pages" workflow by hand.
+
+A project site is served under `/<repository>/`; the build reads that prefix from the Pages configuration, so moving to a custom domain needs no code change. Because the site is a snapshot, same-day changes such as a screening selling out appear after the next build.
+
 ## Automation
 
 - `.github/workflows/ci.yml` runs typecheck, tests and the build on every push to `main` and every pull request.
-- `.github/workflows/ingest.yml` runs the ingestion job once a day at 9:00 a.m. Vancouver time. GitHub schedules in UTC, so the workflow is scheduled at both 16:00 and 17:00 UTC and skips the run that is not 9 a.m. locally. It can also be started by hand from the Actions tab with a custom horizon or venue list.
+- `.github/workflows/ingest.yml` runs the ingestion job once a day at 9:00 a.m. Vancouver time, then redeploys the site. GitHub schedules in UTC, so the workflow is scheduled at both 16:00 and 17:00 UTC and skips the one that is not 9 a.m. locally. It can also be started by hand from the Actions tab with a custom horizon or venue list.
+- `.github/workflows/deploy-pages.yml` builds and publishes the site. `pages.yml` calls it on every push to `main`.
 
-The ingest workflow needs two repository secrets: `DATABASE_URL` and `TMDB_API_TOKEN`.
+## Data files
 
-## Read API
+The build also writes two JSON files next to the page:
 
-- `GET /api/showtimes?days=7`: upcoming showtimes through the end of the Nth Vancouver calendar day (1–14, default 7)
-- `GET /api/movies/today`: the rest of today in Vancouver time
+- `/api/showtimes.json`: upcoming showtimes through the end of the 14th Vancouver calendar day
+- `/api/today.json`: the rest of the build day in Vancouver time
 
-Both return `{ data, meta }` where `meta.generatedAt` is the snapshot time and `meta.demo` flags preview data.
+Both hold `{ data, meta }` where `meta.generatedAt` is the build time and `meta.demo` flags preview data.
 
 ## Verification
 

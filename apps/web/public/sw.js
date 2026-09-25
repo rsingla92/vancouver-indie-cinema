@@ -1,15 +1,17 @@
 /* IndieScreen service worker.
- * - Navigations and API data: network first, cached copy when offline.
+ * - Navigations and JSON data: network first, cached copy when offline.
  * - Hashed Next.js assets: cache first (immutable).
  * - TMDB posters: stale-while-revalidate with a bounded cache.
  * Bump VERSION to drop every old cache on the next activation.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = `indiescreen-shell-${VERSION}`;
 const DATA_CACHE = `indiescreen-data-${VERSION}`;
 const IMAGE_CACHE = `indiescreen-images-${VERSION}`;
 const LIVE_CACHES = new Set([SHELL_CACHE, DATA_CACHE, IMAGE_CACHE]);
-const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
+// The site may live under a path prefix (a GitHub Pages project site); the worker is served from `${BASE}/sw.js`.
+const BASE = new URL(self.location.href).pathname.replace(/\/sw\.js$/, "");
+const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/icon.svg`, `${BASE}/icon-192.png`];
 const IMAGE_HOSTS = new Set(["image.tmdb.org"]);
 const MAX_IMAGES = 120;
 
@@ -72,7 +74,7 @@ const offlineJson = () => new Response(JSON.stringify({ data: [], meta: { offlin
   status: 503,
   headers: { "content-type": "application/json", "cache-control": "no-store" },
 });
-const offlinePage = async () => (await caches.match("/")) ?? new Response("You are offline.", { status: 503, headers: { "content-type": "text/plain" } });
+const offlinePage = async () => (await caches.match(`${BASE}/`)) ?? new Response("You are offline.", { status: 503, headers: { "content-type": "text/plain" } });
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -80,9 +82,9 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   if (url.origin === self.location.origin) {
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith(`${BASE}/api/`)) {
       event.respondWith(networkFirst(request, DATA_CACHE).catch(offlineJson));
-    } else if (url.pathname.startsWith("/_next/static/")) {
+    } else if (url.pathname.startsWith(`${BASE}/_next/static/`)) {
       event.respondWith(cacheFirst(request, SHELL_CACHE));
     } else if (request.mode === "navigate") {
       event.respondWith(networkFirst(request, SHELL_CACHE).catch(offlinePage));

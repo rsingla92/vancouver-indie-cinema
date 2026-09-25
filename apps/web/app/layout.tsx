@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { withBase } from "@/lib/base-path";
 
 export const metadata: Metadata = {
   title: "IndieScreen Vancouver",
   description: "Independent cinema showtimes across Vancouver.",
-  manifest: "/manifest.webmanifest",
+  manifest: withBase("/manifest.webmanifest"),
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: withBase("/icon.svg"), type: "image/svg+xml" },
+      { url: withBase("/icon-192.png"), sizes: "192x192", type: "image/png" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: withBase("/apple-touch-icon.png"),
   },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "IndieScreen" },
 };

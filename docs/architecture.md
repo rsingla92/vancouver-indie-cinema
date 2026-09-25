@@ -4,21 +4,21 @@
 
 The project is a TypeScript monorepo with three runtime boundaries:
 
-1. **Web PWA** — Next.js App Router renders the mobile-first browsing experience and exposes read-only internal API routes.
+1. **Web PWA** — Next.js App Router, exported as a static site at build time and served by GitHub Pages, with read-only JSON data files beside the page.
 2. **Ingestion worker** — scheduled Node.js jobs fetch raw venue schedules, normalize records, enrich movies through TMDB, and upsert canonical entities.
-3. **PostgreSQL** — Supabase stores source provenance, canonical movies, venue screenings, tags, and ingestion history.
+3. **PostgreSQL** — a Neon project stores source provenance, canonical movies, venue screenings, tags, and ingestion history.
 
 ```mermaid
 flowchart TD
   V[Venue sources] --> I[Ingestion worker]
   I --> N[Normalization + TMDB]
-  N --> D[(Supabase Postgres)]
-  D --> A[Next.js API routes]
-  A --> P[Installable PWA]
+  N --> D[(Neon Postgres)]
+  D --> A[Static export at build time]
+  A --> P[GitHub Pages PWA]
   P --> T[External ticket page]
 ```
 
-The web application never calls venue systems or TMDB directly. The ingestion worker is the only writer for schedule data. The client receives normalized, cacheable projections from internal API routes.
+The web application never calls venue systems or TMDB directly. The ingestion worker is the only writer for schedule data. The site is built from the database after each ingest, so the browser receives a normalized, cacheable snapshot rather than live queries.
 
 ## Repository structure
 
@@ -27,10 +27,10 @@ vancouver-indie-cinema/
 ├── apps/
 │   ├── web/                         # Next.js App Router PWA
 │   │   ├── app/
-│   │   │   ├── api/showtimes/       # Upcoming showtimes for N Vancouver days
-│   │   │   ├── api/movies/today/    # The rest of today
+│   │   │   ├── api/showtimes.json/  # 14-day listing, written at build time
+│   │   │   ├── api/today.json/      # The rest of the build day
 │   │   │   ├── manifest.ts          # Web App Manifest
-│   │   │   └── page.tsx             # Server-rendered listing (ISR, 5 minutes)
+│   │   │   └── page.tsx             # Listing page, rendered at build time
 │   │   ├── components/              # Client UI and service-worker registration
 │   │   ├── lib/                     # Shared Postgres client, projections, demo data
 │   │   └── public/                  # Icons and the service worker
@@ -40,7 +40,7 @@ vancouver-indie-cinema/
 │       │   ├── normalization/       # Title rules, TMDB ranking, repository
 │       │   └── jobs/ingest.ts       # Run orchestration and reconciliation
 │       └── test/                    # Vitest suites with fixture HTML/JSON
-├── supabase/migrations/             # Versioned PostgreSQL migrations and venue seed
+├── db/migrations/                   # Versioned PostgreSQL migrations and venue seeds
 └── docs/                            # Architecture and source findings
 ```
 
@@ -81,7 +81,7 @@ Important choices:
 
 ## PWA and caching boundary
 
-The service worker should precache the application shell and use stale-while-revalidate for poster images. Schedule API responses should use network-first with a bounded cached fallback and display a visible “last updated” timestamp. Ticket URLs must never be treated as usable offline; the UI should explain that connectivity is required to continue to the theatre.
+The service worker precaches the application shell and uses stale-while-revalidate for poster images. The page and JSON data files use network-first with a cached fallback, and the page shows the build time as “last updated”. Ticket URLs must never be treated as usable offline; the UI should explain that connectivity is required to continue to the theatre.
 
 ## Security and operations
 
@@ -94,4 +94,4 @@ The service worker should precache the application shell and use stale-while-rev
 
 ## Deliberately deferred
 
-This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`. CI and the daily ingestion schedule live in `.github/workflows/`. Deployment of the web app remains to be set up.
+This document was written before implementation. Extractors, normalization rules, TMDB thresholds, API routes, UI, and the service worker now exist under `apps/`. CI, the daily ingestion schedule, and the GitHub Pages deployment live in `.github/workflows/`.

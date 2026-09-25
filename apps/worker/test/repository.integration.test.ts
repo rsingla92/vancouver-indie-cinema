@@ -24,8 +24,9 @@ const candidate: RankedCandidate = {
 };
 
 suite("CinemaRepository against Postgres", () => {
-  const repository = new CinemaRepository(databaseUrl);
-  const sql = postgres(databaseUrl ?? "", { max: 1 });
+  // Constructed in beforeAll so collecting this file without DATABASE_URL stays a clean skip.
+  let repository: CinemaRepository;
+  let sql: postgres.Sql;
   let theatreId: string;
 
   const cleanup = async () => {
@@ -38,6 +39,8 @@ suite("CinemaRepository against Postgres", () => {
     where s.source_uid = ${sourceUid} order by 1`).map((row) => row.slug);
 
   beforeAll(async () => {
+    repository = new CinemaRepository(databaseUrl);
+    sql = postgres(databaseUrl ?? "", { max: 1 });
     await cleanup();
     theatreId = (await repository.findTheatreId("rio-theatre"))!;
     expect(theatreId).toBeTruthy();

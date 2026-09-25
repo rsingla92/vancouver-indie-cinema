@@ -111,11 +111,11 @@ section { scroll-margin-top: 8px; }
 .searchbox input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Featured screening */
-.tonight { padding: 18px 16px 22px; border-bottom: 1px solid var(--rule); }
-.tonight-label { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 12px; color: var(--ink-soft); }
+.pick { padding: 18px 16px 22px; border-bottom: 1px solid var(--rule); }
+.pick-label { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 12px; color: var(--ink-soft); }
 .pick-another { margin-left: auto; font-size: 12px; white-space: nowrap; }
-.tonight-body::after { content: ""; display: block; clear: both; }
-.tonight h1 { margin: 6px 0 10px; font: 700 clamp(34px, 9vw, 60px)/1.02 var(--serif); letter-spacing: -.02em; }
+.pick-body::after { content: ""; display: block; clear: both; }
+.pick h1 { margin: 6px 0 10px; font: 700 clamp(34px, 9vw, 60px)/1.02 var(--serif); letter-spacing: -.02em; }
 .blurb { max-width: 56ch; margin: 0 0 12px; font: 15px/1.55 var(--serif); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 16px; font-size: 13px; }
 .facts div { display: contents; }
@@ -217,7 +217,7 @@ section { scroll-margin-top: 8px; }
 @media (min-width: 600px) {
   .zine { padding-bottom: 0; }
   .flyers { grid-template-columns: repeat(4, 1fr); }
-  .masthead, .tonight { padding-left: 24px; padding-right: 24px; }
+  .masthead, .pick { padding-left: 24px; padding-right: 24px; }
   .rule-heading, .filters, .notice, .empty, .flyers, .rows, .colophon { margin-left: 24px; margin-right: 24px; }
 }
 @media (min-width: 832px) {

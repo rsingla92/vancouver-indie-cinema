@@ -4,7 +4,7 @@ import { Colophon } from "./colophon";
 import { FilmGrid } from "./film-grid";
 import { Masthead, type NavTab } from "./masthead";
 import { ShowtimeList } from "./showtime-list";
-import { Tonight } from "./tonight";
+import { Pick } from "./pick";
 import { useCity } from "@/hooks/use-city";
 import { useNow } from "@/hooks/use-now";
 import { VANCOUVER_TZ } from "@/lib/format";
@@ -27,7 +27,7 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
   const [city, setCity] = useCity(cities);
   const [venue, setVenue] = useState("all");
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<NavTab>("tonight");
+  const [tab, setTab] = useState<NavTab>("now-showing");
   const [pick, setPick] = useState(pickSeed);
 
   const live = useMemo(() => upcoming(initialShowtimes, now), [initialShowtimes, now]);
@@ -54,8 +54,8 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
       tab={tab} onTabChange={setTab} query={query} onQueryChange={setQuery}
     />
     <main>
-      <Tonight film={featured} city={city} now={now} timezone={timezone} searching={query.trim().length > 0} {...(films.length > 1 ? { onPickAnother: pickAnother } : {})} />
-      <section className="listings" id="showtimes">
+      <Pick film={featured} city={city} now={now} timezone={timezone} searching={query.trim().length > 0} {...(films.length > 1 ? { onPickAnother: pickAnother } : {})} />
+      <section className="listings" id="now-showing">
         <FilmGrid films={films} theatres={theatres} venue={activeVenue} onVenueChange={setVenue} demo={demo} />
         <ShowtimeList showtimes={visible} timezone={timezone} />
       </section>

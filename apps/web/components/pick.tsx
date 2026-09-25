@@ -4,7 +4,7 @@ import { dateKey, formatClock, formatDay } from "@/lib/format";
 import { shortSynopsis } from "@/lib/showtimes";
 import type { ShowtimeView } from "@/lib/types";
 
-interface TonightProps {
+interface PickProps {
   film: ShowtimeView | undefined;
   city: string;
   now: Date;
@@ -15,21 +15,21 @@ interface TonightProps {
 }
 
 /** The featured screening: a random pick from the films on show in the chosen city. */
-export function Tonight({ film, city, now, timezone, searching, onPickAnother }: TonightProps) {
+export function Pick({ film, city, now, timezone, searching, onPickAnother }: PickProps) {
   if (!film) {
-    return <section className="tonight" id="tonight" aria-labelledby="tonight-title">
-      <div className="tonight-label"><Stamp>{city}</Stamp></div>
-      <h1 id="tonight-title">No films found</h1>
+    return <section className="pick" id="pick" aria-labelledby="pick-title">
+      <div className="pick-label"><Stamp>{city}</Stamp></div>
+      <h1 id="pick-title">No films found</h1>
       <p className="blurb">{searching ? "Nothing matches your search." : "No upcoming screenings."}</p>
     </section>;
   }
 
-  const tonight = dateKey(film.startsAt, timezone) === dateKey(now, timezone);
-  return <section className="tonight" id="tonight" aria-labelledby="tonight-title">
-    <div className="tonight-label"><Stamp tone="red">{tonight ? "Tonight" : "Coming up"}</Stamp><span className="mono">{formatDay(film.startsAt, timezone)} · {formatClock(film.startsAt, timezone)}</span>{onPickAnother && <button type="button" className="textlink pick-another" onClick={onPickAnother}>[ pick another ]</button>}</div>
-    <div className="tonight-body">
+  const today = dateKey(film.startsAt, timezone) === dateKey(now, timezone);
+  return <section className="pick" id="pick" aria-labelledby="pick-title">
+    <div className="pick-label"><Stamp tone="red">Pick</Stamp><span className="mono">{today ? "Today" : formatDay(film.startsAt, timezone)} · {formatClock(film.startsAt, timezone)}</span>{onPickAnother && <button type="button" className="textlink pick-another" onClick={onPickAnother}>[ pick another ]</button>}</div>
+    <div className="pick-body">
       <Still movie={film} />
-      <h1 id="tonight-title">{film.title}</h1>
+      <h1 id="pick-title">{film.title}</h1>
       {film.synopsis && <p className="blurb">{shortSynopsis(film.synopsis)}</p>}
       <dl className="facts">
         <div><dt>Where</dt><dd>{film.theatre.name}</dd></div>

@@ -1,10 +1,10 @@
 # Double Bill
 
-Independent cinema showtimes, starting with Vancouver. A mobile-first static site that lists what the city's independent and repertory screens are playing; ticket purchases stay on each venue's own site.
+Independent cinema showtimes for Vancouver, Toronto and Montreal. A mobile-first static site that lists what each city's independent and repertory screens are playing; ticket purchases stay on each venue's own site.
 
 ## Project status
 
-The pipeline is complete: source extraction, deterministic title normalization, guarded TMDB matching, idempotent PostgreSQL persistence with per-run reconciliation, JSON data files, and an installable mobile-first site. It has no LLM or generative-AI runtime dependency. The site is built for more than one city; only Vancouver has extractors so far (see [Cities](#cities)).
+The pipeline is complete: source extraction, deterministic title normalization, guarded TMDB matching, idempotent PostgreSQL persistence with per-run reconciliation, JSON data files, and an installable mobile-first site. It has no LLM or generative-AI runtime dependency. The site covers three cities (see [Cities](#cities)).
 
 ## Stack
 
@@ -39,7 +39,15 @@ Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses lab
 
 ## Cities
 
-Every theatre carries a `city` and an IANA `timezone`, the JSON files include both, and the site shows a city picker in the dateline as soon as the data holds more than one city. Times are always shown in the theatre's own zone. Adding a city means seeding its theatres (a migration like `006_seed_toronto_montreal_theatres.sql`, which already seeds fourteen Toronto and Montreal venues) and writing one extractor per venue under `apps/worker/src/extractors/`, then adding the venue slug to `venueSlugSchema`; nothing in the web app changes. The venues and their ticketing platforms are tracked in issues #3 (Toronto), #4 (Montreal) and #5 (other cities).
+Every theatre carries a `city` and an IANA `timezone`, the JSON files include both, and the site shows a city picker in the dateline as soon as the data holds more than one city. Times are always shown in the theatre's own zone. Adding a city means seeding its theatres (a migration like `006_seed_toronto_montreal_theatres.sql`) and writing one extractor per venue under `apps/worker/src/extractors/`, then adding the venue slug to `venueSlugSchema`; nothing in the web app changes. Other cities are tracked in issue #5.
+
+| City | Venues | Slugs |
+|---|---|---|
+| Vancouver | Rio Theatre, The Park Theatre, The Cinematheque, VIFF Centre, Hollywood Theatre | `rio-theatre`, `park-theatre`, `the-cinematheque`, `viff-centre`, `hollywood-theatre` |
+| Toronto | Revue Cinema, Fox Theatre, Paradise Theatre, The Royal, Carlton Cinema, Kingsway Theatre | `revue-cinema`, `fox-theatre`, `paradise-theatre`, `the-royal`, `carlton-cinema`, `kingsway-theatre` |
+| Montreal | Cinéma du Parc, Cinéma Beaubien, Cinéma du Musée, Cinéma Moderne, Cinéma Public, Cinémathèque québécoise | `cinema-du-parc`, `cinema-beaubien`, `cinema-du-musee`, `cinema-moderne`, `cinema-public`, `cinematheque-quebecoise` |
+
+TIFF Lightbox and the Hot Docs Ted Rogers Cinema are seeded but have no extractor: tiff.net answers every server-side request with a bot challenge and Hot Docs publishes its schedule only on an Agile Ticketing site that does the same. [`docs/hidden-api-hunt.md`](docs/hidden-api-hunt.md) records what was found for every venue.
 
 ## Ingestion
 
@@ -48,7 +56,7 @@ npm run ingest                                    # every venue, 60-day horizon
 npm run ingest -- --days=30 --venues=rio-theatre  # narrower run
 ```
 
-For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. Venue slugs are `rio-theatre`, `park-theatre`, `the-cinematheque`, `viff-centre`, and `hollywood-theatre`. The Rio and the Park share one adapter for the Barker events plugin their sites run.
+For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. The venue slugs are listed under [Cities](#cities). Venues that share a platform share an adapter: the Rio and the Park (Barker events plugin), Cinéma du Parc, Beaubien and du Musée (the cinemacinema.ca schedule), the Cinémathèque québécoise and the Carlton (OmniWeb Ticketing), and the Revue and the Fox (Agile Ticketing links on their own sites).
 
 The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is linked only when the leading candidate clears both the confidence threshold and ambiguity margin. Uncertain screenings are still listed, under the title the venue printed and without poster or synopsis, and stay flagged in `raw_source_items` with `normalization_status = 'review'`; events the rules recognise as not a film are not listed.
 

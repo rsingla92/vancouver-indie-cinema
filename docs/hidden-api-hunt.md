@@ -32,6 +32,13 @@ Reject analytics, ad, newsletter, CAPTCHA, and payment calls. A schedule source 
 | Cinéma du Parc, Cinéma Beaubien, Cinéma du Musée | One SvelteKit site, cinemacinema.ca | `/en/schedule/__data.json?date=YYYY-MM-DD` (JSON, one day per request) | High |
 | Cinéma Moderne | WordPress calendar + TicketAcces | `/horaire/YYYY/MM/` (HTML, one month per request) | High |
 | Cinéma Public | WordPress calendar + TicketAcces | `/horaire/` (HTML, the whole published fortnight) | High |
+| Cinémathèque québécoise | Craft-style site behind Cloudflare + OmniWeb Ticketing | OmniWeb day page `omniwebticketing6.com/cinematheque/?schdate=YYYY-MM-DD` (`gMovieData` JSON in the page) | High |
+| Carlton Cinema (Imagine Cinemas) | WordPress + OmniWeb Ticketing | OmniWeb day page `omniwebticketing6.com/imaginecinemas/carlton/?schdate=YYYY-MM-DD` | High |
+| Kingsway Theatre | Hand-made static HTML, http only | `http://kingswaymovies.ca/new.html`, one week as text | High |
+| The Royal | WordPress posts | `/wp-json/wp/v2/posts?categories=95` (the "screenings" category) | Medium |
+| Paradise Theatre | WordPress (Marquee theme) with its own box office | `/calendar-view/YYYY-MM` for the films, each film page's ScreeningEvent JSON-LD for the screenings | High |
+| TIFF Lightbox | tiff.net behind AWS WAF | Every path answers a JavaScript challenge (HTTP 202, `x-amzn-waf-action: challenge`); no server-side source found | Blocked |
+| Hot Docs Ted Rogers Cinema | Apostrophe CMS + Agile Ticketing | hotdocs.ca has no schedule of its own; `/whats-on/cinema` redirects to the Agile box office, which is behind Incapsula | Blocked |
 | Revue Cinema | WordPress (Bricks) + Agile Ticketing | FullCalendar events array on `/calendar/`; Agile link from each film page | High |
 | Fox Theatre | WordPress (Elementor) + Agile Ticketing | `/wp-json/wp/v2/movies` for the films, each film page for times and Agile links | High |
 
@@ -189,6 +196,37 @@ Investigated 2026-09-25 from a sandbox that can reach the sites. Every Toronto v
 - The `movies` post type is public on the WordPress REST route `/wp-json/wp/v2/movies?per_page=100&_fields=id,slug,link,title,class_list`. Each post's `class_list` names its screening days (`event-date-2026-10-17`), which bounds the film pages to fetch. About 35 posts are live at a time.
 - Each film page prints `.showtimes-lists .item` rows with `.date` ("Saturday, October 17"), `.time` ("9:00 pm") and an Agile link `ticketsearchcriteria.aspx?evtinfo=<event id>~<guid>` per screening; the event id is the `sourceUid`. A film the venue has sold out carries "SOLD OUT" in its title. A closure notice is published as a movie with midnight rows and empty links; those rows are skipped.
 - Fixtures: `fox-movies.json` (three posts from the REST route), `fox-movie.html` and `fox-movie-sold-out.html`.
+
+### OmniWeb Ticketing (Cinémathèque québécoise and the Carlton)
+
+- Both venues sell through OmniWeb Ticketing on `omniwebticketing6.com`, under `/cinematheque/` and `/imaginecinemas/carlton/`. The venue sites link a screening as `?schdate=<day>&perfix=<performance id>`; the extractor builds the same link.
+- A day page (`?schdate=YYYY-MM-DD`) embeds `var gMovieData = {...}`: one entry per film (`code`, `title`, `runTimeStr`, `ratingReason`) with `schAuds` (auditoriums) holding `schPerfsGeneral` and `schPerfsReserved` performances (`perfIx`, `curtainTime` "2026-09-25 19:30" local, `seatsRemaining`). The page's `<select>` lists every day that has performances, about a month ahead for the Cinémathèque and five weeks for the Carlton. The crawl is the first day plus one request per further day inside the horizon; `perfIx` is the `sourceUid`, zero seats means sold out.
+- Titles end with a version label the Cinémathèque uses (`(VOSTA)`, `(VOF)`), kept as a tag, or with a year for the Carlton's repertory titles (`A Clockwork Orange (1971)`), kept as the release year.
+- The Cinémathèque's own site (`cinematheque.qc.ca`) answers every server-side request with a Cloudflare block page, so the box office is the only source and only ticketed screenings appear; free events are missed. The Carlton's page on imaginecinemas.com prints the same performances with links to OmniWeb. Fixtures: `omniweb-cinematheque.html` and `omniweb-carlton.html` (trimmed day pages).
+
+### Kingsway Theatre
+
+- `kingswaymovies.ca` is a hand-made static site whose TLS certificate does not cover the domain, so it is fetched over http. The week's schedule is plain text on `new.html`: a heading "Kingsway Theatre Schedule starting Friday September 24 to Thursday October 01" and one line per show, "1:00 pm Filipinana (daily)", "8:45 pm Obsession (Fri Tues)", "1:00 pm Finding Emily (Fri / Mon to Thurs)". The heading has printed a weekday that does not match its date; the weekday wins because the week always runs Friday to Thursday.
+- There are no ids and no online sales: `sourceUid` is the title and start time, `detailUrl` is the schedule page, and `ticketUrl` is empty. Fixture: `kingsway-new.html`.
+
+### The Royal
+
+- Events are WordPress posts. Category 95 ("screenings", under "events") holds the film events; comedy has its own category. The REST route `/wp-json/wp/v2/posts?categories=95&per_page=100` returns them with the rendered title and body.
+- The title ends with the date ("Persépolis – September 2, 2026", "… – September 24 & 25, 2026"); the body gives the start time ("Program Begins: 6:30 PM", "Show: 7:30pm", falling back to "Doors 7pm") and the promoter's ticket link (Eventbrite, AdmitOne, Ticketmaster). A post without a time in its body is skipped with a warning. `sourceUid` is the post id and start time. Fixture: `royal-posts.json`.
+
+### Paradise Theatre
+
+- `/calendar-view/YYYY-MM` lists every event of a month; each `li.calendar-show-item` holds the event card as HTML in `data-show-card`, whose link tells the kind: `/movies/` and `/programs/` are films and shorts programmes, `/special_events/` are music, comedy and quizzes and are skipped. Day pages (`/home/YYYY-MM-DD`) show the same with times but one day per request.
+- Each film page embeds schema.org JSON-LD: a `Movie` (with `dateCreated`, the release date) and one `ScreeningEvent` per upcoming showtime with `startDate` (with offset), `eventStatus`, offers with `availability`, and `url` `https://paradiseonbloor.com/purchase/<showtime id>/`, the venue's own box office. The showtime id is the `sourceUid`. Past showtimes are not in the JSON-LD.
+- The crawl is one calendar page per month in the horizon plus one request per film. Fixtures: `paradise-calendar.html` (two days) and `paradise-movie.html`.
+
+### TIFF Lightbox (not ingested)
+
+- Every path on `www.tiff.net`, including `robots.txt`, answers HTTP 202 with `x-amzn-waf-action: challenge` and an AWS WAF JavaScript challenge page, whatever the headers. The Internet Archive holds the same challenge page. The listing JSON the site fetches could not be observed from a server, and Ticketmaster's site is bot-protected as well. TIFF stays out until a source that answers without a browser is found; the `tiff-lightbox` theatre row exists and simply has no showtimes.
+
+### Hot Docs Ted Rogers Cinema (not ingested)
+
+- hotdocs.ca (Apostrophe CMS) has no schedule of its own: `/whats-on/cinema` redirects to `boxoffice.hotdocs.ca`, an Agile Ticketing site behind Incapsula that returns a block page to server-side requests, and the Agile feed and widget are on the same host. Nothing is archived. As with TIFF, the theatre row exists without showtimes.
 
 ## Montreal
 

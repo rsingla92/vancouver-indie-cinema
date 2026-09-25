@@ -1,13 +1,18 @@
 import type { DateRange, ExtractionBatch, VenueSlug } from "../contracts.js";
 import { extractBeaubien } from "./beaubien.js";
+import { extractCarlton } from "./carlton.js";
+import { extractCinemathequeQuebecoise } from "./cinematheque-quebecoise.js";
 import { extractCinematheque } from "./cinematheque.js";
 import { extractDuMusee } from "./du-musee.js";
 import { extractDuParc } from "./du-parc.js";
 import { extractFox } from "./fox.js";
+import { extractKingsway } from "./kingsway.js";
 import { extractModerne } from "./moderne.js";
 import { extractPublic } from "./public.js";
 import { extractRevue } from "./revue.js";
+import { extractRoyal } from "./royal.js";
 import { extractHollywood } from "./hollywood.js";
+import { extractParadise } from "./paradise.js";
 import { extractPark } from "./park.js";
 import { extractRio } from "./rio.js";
 import { extractViff } from "./viff.js";
@@ -27,6 +32,12 @@ export { extractRevue, parseRevueCalendar, parseRevueFilmPage, revueShowtime } f
 export { extractFox, parseFoxMoviePage, parseFoxPosts } from "./fox.js";
 export { extractModerne, parseModerneCalendar, monthsInRange } from "./moderne.js";
 export { extractPublic, parsePublicSchedule } from "./public.js";
+export { extractOmniWeb, parseOmniWebDay, readMovieData, omniWebTicketUrl, CINEMATHEQUE_QUEBECOISE, CARLTON_CINEMA, type OmniWebVenue } from "./omniweb.js";
+export { extractCinemathequeQuebecoise } from "./cinematheque-quebecoise.js";
+export { extractCarlton } from "./carlton.js";
+export { extractKingsway, parseKingswaySchedule, parseDaySpec } from "./kingsway.js";
+export { extractRoyal, parseRoyalPosts } from "./royal.js";
+export { extractParadise, parseParadiseCalendar, parseParadiseMoviePage } from "./paradise.js";
 
 export type VenueExtractor = (range: DateRange) => Promise<ExtractionBatch>;
 
@@ -44,4 +55,9 @@ export const VENUE_EXTRACTORS: Readonly<Record<VenueSlug, VenueExtractor>> = {
   "fox-theatre": (range) => extractFox(range),
   "cinema-moderne": (range) => extractModerne(range),
   "cinema-public": () => extractPublic(),
+  "cinematheque-quebecoise": (range) => extractCinemathequeQuebecoise(range),
+  "carlton-cinema": (range) => extractCarlton(range),
+  "kingsway-theatre": () => extractKingsway(),
+  "the-royal": () => extractRoyal(),
+  "paradise-theatre": (range) => extractParadise(range),
 };

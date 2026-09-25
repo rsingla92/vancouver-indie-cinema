@@ -13,6 +13,11 @@ export const venueSlugSchema = z.enum([
   "fox-theatre",
   "cinema-moderne",
   "cinema-public",
+  "cinematheque-quebecoise",
+  "carlton-cinema",
+  "kingsway-theatre",
+  "the-royal",
+  "paradise-theatre",
 ]);
 
 export const extractedShowtimeSchema = z.object({

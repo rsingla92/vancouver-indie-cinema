@@ -2,12 +2,6 @@ import { formatClock, formatLongDay } from "@/lib/format";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import type { TheatreRef } from "@/lib/types";
 
-type NavTab = "now-showing" | "showtimes";
-const NAV: ReadonlyArray<{ id: NavTab; href: string; label: string }> = [
-  { id: "now-showing", href: "#now-showing", label: "Now showing" },
-  { id: "showtimes", href: "#showtimes", label: "Showtimes" },
-];
-
 interface MastheadProps {
   city: string;
   cities: string[];
@@ -16,15 +10,11 @@ interface MastheadProps {
   now: Date;
   generatedAt: string;
   timezone: string;
-  tab: NavTab;
-  onTabChange: (tab: NavTab) => void;
   query: string;
   onQueryChange: (query: string) => void;
 }
 
-export type { NavTab };
-
-export function Masthead({ city, cities, onCityChange, theatres, now, generatedAt, timezone, tab, onTabChange, query, onQueryChange }: MastheadProps) {
+export function Masthead({ city, cities, onCityChange, theatres, now, generatedAt, timezone, query, onQueryChange }: MastheadProps) {
   return <header className="masthead">
     <div className="dateline">
       {cities.length > 1
@@ -35,9 +25,6 @@ export function Masthead({ city, cities, onCityChange, theatres, now, generatedA
     </div>
     <a className="brand" href="#top" aria-label="Double Bill home">Double<span>Bill</span></a>
     <p className="tagline">{theatres.length > 0 ? theatres.map((theatre) => theatre.name).join(" · ") : SITE_DESCRIPTION}</p>
-    <nav className="menu" aria-label="Primary navigation">
-      {NAV.map(({ id, href, label }) => <a key={id} href={href} className={tab === id ? "current" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => onTabChange(id)}>[ {label} ]</a>)}
-    </nav>
     <form className="searchbox" role="search" onSubmit={(event) => event.preventDefault()}>
       <label htmlFor="film-search">Search</label>
       <div className="searchbox-row">

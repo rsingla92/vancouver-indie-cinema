@@ -1,4 +1,4 @@
-import { dateKey, formatMonth } from "./format";
+import { dateKey, formatDay, formatMonth } from "./format";
 import type { ShowtimeView, TheatreRef } from "./types";
 
 /** Showtimes that have not started yet as of `now`. Input order is preserved. */
@@ -17,6 +17,41 @@ export function firstShowtimePerMovie(items: ShowtimeView[]): ShowtimeView[] {
     output.push(item);
   }
   return output;
+}
+
+export interface DayGroup {
+  key: string;
+  label: string;
+  showtimes: ShowtimeView[];
+}
+
+export interface FilmListing {
+  /** The film's first screening, standing in for the film. */
+  film: ShowtimeView;
+  /** Every tag any of its screenings carries. */
+  tags: string[];
+  days: DayGroup[];
+}
+
+/** One entry per film in first-screening order, its showtimes grouped by calendar day in the venue's zone. Input must be sorted by start time. */
+export function listingsOf(items: ShowtimeView[], timezone: string): FilmListing[] {
+  const byFilm = new Map<string, FilmListing>();
+  for (const item of items) {
+    let listing = byFilm.get(item.movieId);
+    if (!listing) {
+      listing = { film: item, tags: [], days: [] };
+      byFilm.set(item.movieId, listing);
+    }
+    for (const tag of item.tags) if (!listing.tags.includes(tag)) listing.tags.push(tag);
+    const key = dateKey(item.startsAt, timezone);
+    let day = listing.days.at(-1);
+    if (!day || day.key !== key) {
+      day = { key, label: formatDay(item.startsAt, timezone), showtimes: [] };
+      listing.days.push(day);
+    }
+    day.showtimes.push(item);
+  }
+  return [...byFilm.values()];
 }
 
 /** Distinct theatres in first-seen order. */

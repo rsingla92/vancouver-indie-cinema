@@ -1,14 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Colophon } from "./colophon";
-import { FilmGrid } from "./film-grid";
-import { Masthead, type NavTab } from "./masthead";
-import { ShowtimeList } from "./showtime-list";
+import { Listings } from "./listings";
+import { Masthead } from "./masthead";
 import { Pick } from "./pick";
 import { useCity } from "@/hooks/use-city";
 import { useNow } from "@/hooks/use-now";
 import { VANCOUVER_TZ } from "@/lib/format";
-import { citiesOf, DEFAULT_WINDOW, firstShowtimePerMovie, inWindow, matchesQuery, theatresOf, upcoming, windowsOf } from "@/lib/showtimes";
+import { citiesOf, DEFAULT_WINDOW, firstShowtimePerMovie, inWindow, listingsOf, matchesQuery, theatresOf, upcoming, windowsOf } from "@/lib/showtimes";
 import type { ShowtimeView } from "@/lib/types";
 
 interface CinemaAppProps {
@@ -28,7 +27,6 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
   const [venue, setVenue] = useState("all");
   const [when, setWhen] = useState(DEFAULT_WINDOW);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<NavTab>("now-showing");
   const [pick, setPick] = useState(pickSeed);
 
   const live = useMemo(() => upcoming(initialShowtimes, now), [initialShowtimes, now]);
@@ -44,6 +42,7 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
     [inCity, activeVenue, activeWindow, now, timezone, query],
   );
   const films = useMemo(() => firstShowtimePerMovie(visible), [visible]);
+  const listings = useMemo(() => listingsOf(visible, timezone), [visible, timezone]);
   const featured = films.length > 0 ? films[pick % films.length] : undefined;
   const pickAnother = () => setPick((current) => {
     let next = current;
@@ -55,14 +54,15 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
     <Masthead
       city={city} cities={cities} onCityChange={setCity} theatres={theatres}
       now={now} generatedAt={generatedAt} timezone={timezone}
-      tab={tab} onTabChange={setTab} query={query} onQueryChange={setQuery}
+      query={query} onQueryChange={setQuery}
     />
     <main>
       <Pick film={featured} city={city} now={now} timezone={timezone} searching={query.trim().length > 0} {...(films.length > 1 ? { onPickAnother: pickAnother } : {})} />
-      <section className="listings" id="now-showing">
-        <FilmGrid films={films} theatres={theatres} venue={activeVenue} onVenueChange={setVenue} windows={windows} when={activeWindow} onWhenChange={setWhen} demo={demo} />
-        <ShowtimeList showtimes={visible} timezone={timezone} range={windows.find((window) => window.id === activeWindow)?.label ?? ""} />
-      </section>
+      <Listings
+        listings={listings} screenings={visible.length} theatres={theatres} venue={activeVenue} onVenueChange={setVenue}
+        windows={windows} when={activeWindow} onWhenChange={setWhen}
+        range={windows.find((window) => window.id === activeWindow)?.label ?? ""} timezone={timezone} demo={demo}
+      />
     </main>
     <Colophon generatedAt={generatedAt} timezone={timezone} />
   </div>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDemoShowtimes } from "./demo-data";
-import { citiesOf, firstShowtimePerMovie, inWindow, matchesQuery, shortSynopsis, theatresOf, upcoming, windowsOf } from "./showtimes";
+import { citiesOf, firstShowtimePerMovie, inWindow, listingsOf, matchesQuery, shortSynopsis, theatresOf, upcoming, windowsOf } from "./showtimes";
 
 const now = new Date("2026-09-23T12:00:00Z");
 const showtimes = getDemoShowtimes(now);
@@ -82,5 +82,17 @@ describe("date windows", () => {
     expect(inWindow(at("2026-10-25T19:00:00-07:00"), "2026-10", tonight, tz)).toBe(true);
     expect(inWindow(at("2026-11-01T19:00:00-07:00"), "2026-10", tonight, tz)).toBe(false);
     expect(inWindow(at("2027-03-01T19:00:00-08:00"), "all", tonight, tz)).toBe(true);
+  });
+});
+
+describe("listingsOf", () => {
+  it("groups each film's screenings by day, in first-screening order, and pools their tags", () => {
+    const listings = listingsOf(showtimes, "America/Vancouver");
+    expect(listings.map((listing) => listing.film.movieId)).toEqual(firstShowtimePerMovie(showtimes).map((item) => item.movieId));
+    const perfectDays = listings.find((listing) => listing.film.movieId === "perfect-days")!;
+    expect(perfectDays.days).toHaveLength(2);
+    expect(perfectDays.days.map((day) => day.showtimes.length)).toEqual([1, 1]);
+    expect(perfectDays.days[0]!.label).toMatch(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}$/);
+    expect(listings.find((listing) => listing.film.movieId === "stop-making-sense")!.tags).toEqual(["4K restoration"]);
   });
 });

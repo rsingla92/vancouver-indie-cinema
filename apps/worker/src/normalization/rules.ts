@@ -4,7 +4,7 @@ import type { NormalizedTitle } from "./contracts.js";
  * Pattern tables for the deterministic title normalizer. Bump the version whenever a
  * rule changes so replayed raw items can be told apart from earlier runs.
  */
-export const NORMALIZATION_RULES_VERSION = "title-rules-v4";
+export const NORMALIZATION_RULES_VERSION = "title-rules-v5";
 
 export type Tag = NormalizedTitle["tags"][number];
 
@@ -13,11 +13,15 @@ export const TAG_PATTERNS: ReadonlyArray<readonly [Tag, RegExp]> = [
   ["35mm", /\b35\s*mm\b/i],
   ["70mm", /\b70\s*mm\b/i],
   ["16mm", /\b16\s*mm\b/i],
+  ["4K", /\b4k\b/i],
+  ["re-release", /\bre-?releas(?:e|ed)\b|\bre-?issue[ds]?\b|\brevival\b/i],
   ["Q&A", /\bq\s*(?:&|\+|and)\s*a\b|\bquestions?\s+(?:and|&)\s+answers?\b/i],
   ["restoration", /\b(?:(?:new\s+)?[24]k\s+)?restor(?:ed|ation)\b|\bremaster(?:ed)?\b/i],
   ["sing-along", /\bsing[ -]?along\b/i],
   ["captioned", /\b(?:open\s+)?caption(?:ed|s)?\b|\boc\b/i],
   ["live", /\blive\s+(?:performance|score|music|soundtrack|accompaniment|narration)\b/i],
+  // A plain "Q&A with director" is the Q&A tag; "guests" is for explicit guest wording.
+  ["guests", /\bspecial\s+guests?\b|\bin\s+conversation\b|\bin\s+attendance\b|\bintro(?:duc(?:ed|tion))?\s+by\b|\bhosted\s+by\b/i],
 ];
 
 /** Listings that are events rather than films and must not be matched against TMDB. */

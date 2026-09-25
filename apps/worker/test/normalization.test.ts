@@ -23,6 +23,13 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("The Shining - 1980")).toMatchObject({ coreTitle: "The Shining", releaseYear: 1980 });
   });
 
+  it("keeps format and event labels as tags", () => {
+    expect(normalizer.normalize("In the Mood for Love (2000) – 4K Restoration").tags).toEqual(["4K", "restoration"]);
+    expect(normalizer.normalize("Tampopo with special guests")).toMatchObject({ coreTitle: "Tampopo", tags: ["guests"] });
+    expect(normalizer.normalize("Paris, Texas + intro by the programmer")).toMatchObject({ coreTitle: "Paris, Texas", tags: ["guests"] });
+    expect(normalizer.normalize("The Guest").tags).toEqual([]);
+  });
+
   it("drops French language-version markers", () => {
     expect(normalizer.normalize("Anatomie d'une chute (v.o.s.t.a.)").coreTitle).toBe("Anatomie d'une chute");
     expect(normalizer.normalize("Perfect Days VOSTF").coreTitle).toBe("Perfect Days");
@@ -44,7 +51,7 @@ describe("deterministic title normalization", () => {
     expect(normalizer.normalize("Anora + Q&A with director")).toMatchObject({ coreTitle: "Anora", tags: ["Q&A"] });
     expect(normalizer.normalize("Nosferatu (1922) with live score")).toMatchObject({ coreTitle: "Nosferatu", releaseYear: 1922, tags: ["live"] });
     expect(normalizer.normalize("Chungking Express [4K]").coreTitle).toBe("Chungking Express");
-    expect(normalizer.normalize("Akira (4K Re-Release)").coreTitle).toBe("Akira");
+    expect(normalizer.normalize("Akira (4K Re-Release)")).toMatchObject({ coreTitle: "Akira", tags: ["4K", "re-release"] });
     expect(normalizer.normalize("Suspiria (Reissue)").coreTitle).toBe("Suspiria");
     expect(normalizer.normalize("The Rio Presents: Tampopo").coreTitle).toBe("Tampopo");
     expect(normalizer.normalize("The Park Presents: Lawrence of Arabia (70mm)")).toMatchObject({ coreTitle: "Lawrence of Arabia", tags: ["70mm"] });

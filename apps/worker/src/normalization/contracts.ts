@@ -5,7 +5,7 @@ export const normalizedTitleSchema = z.object({
   coreTitle: z.string().min(1),
   releaseYear: z.number().int().min(1888).max(2200).nullable(),
   contentKind: z.enum(["film", "non_film", "unknown"]),
-  tags: z.array(z.enum(["35mm", "70mm", "16mm", "Q&A", "live", "restoration", "sing-along", "captioned"])),
+  tags: z.array(z.enum(["35mm", "70mm", "16mm", "4K", "Q&A", "live", "restoration", "re-release", "sing-along", "captioned", "guests"])),
   confidence: z.number().min(0).max(1),
   note: z.string().max(160),
 });

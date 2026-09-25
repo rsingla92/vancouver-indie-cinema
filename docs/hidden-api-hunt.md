@@ -29,6 +29,7 @@ Reject analytics, ad, newsletter, CAPTCHA, and payment calls. A schedule source 
 | The Cinematheque | Server-rendered film/calendar pages + Vista Websales ticket links | Film/calendar HTML; Vista `evtinfo` as ticket session ID | High |
 | VIFF Centre | WordPress listings + Elevent embedded booking widget | Server-rendered What's On pages; Elevent only for availability/detail gaps | High |
 | Hollywood Theatre | Webflow CMS + Finsweet CMS pagination | Webflow listing HTML and pagination URLs | High |
+| Cinéma du Parc, Cinéma Beaubien, Cinéma du Musée | One SvelteKit site, cinemacinema.ca | `/en/schedule/__data.json?date=YYYY-MM-DD` (JSON, one day per request) | High |
 
 ## Rio Theatre
 
@@ -164,6 +165,19 @@ Determine whether Finsweet requests the next Webflow page as HTML or calls a JSO
 ### Decision gate
 
 If the response is HTML, treat the stable paginated Webflow pages as the clean source; this is simpler and less brittle than selectors against the interactive homepage. Preserve each provider’s exact external ticket URL. Because Hollywood hosts concerts and comedy as well as film, ingest only the `film` category unless product scope explicitly expands.
+
+## Montreal
+
+Investigated 2026-09-25 from a sandbox that can reach the sites, so these are captured responses rather than assumptions. Every Montreal venue is in `America/Toronto`.
+
+### Cinéma du Parc, Cinéma Beaubien and Cinéma du Musée (cinemacinema.ca)
+
+- The three cinemas share one operator and one SvelteKit site. `/en/schedule` is server-rendered, and SvelteKit serves the same route data as JSON at `/en/schedule/__data.json`; `?date=YYYY-MM-DD` selects a day. No cookie or token is needed.
+- The response is a devalue document (`{type:"data", nodes:[...]}`; each node's `data` is a flat array of values that reference each other by index). The schedule node holds `filmsRepresentations` (one entry per film and cinema, each with `representations`) and `datesRepresentations` (every day with screenings, about two months). The extractor decodes this itself; `apps/worker/test/fixtures/cinemacinema-schedule.json` is a trimmed real response.
+- Each representation carries `representation_id`, `cinema_id` (1 Beaubien, 2 du Parc, 3 du Musée), `representation_date` (midnight UTC, a calendar date), `heure_debut` (`09:30 PM`, local), `version` (`VOF`, `VOSTA`, `VOSTF`, `VOASTF`…) and `format`. The film entry holds the title as printed; the representation title is sometimes truncated or carries a series prefix (`MINUIT: PERFECT BLUE`).
+- Ticket links are `https://billetterie.<cinema>.com/US/movie-purchase.awp?P1=01&P2=<cinema_id, two digits>&P3=<representation_id>`, exactly as the page prints them; the billetterie page confirms date, time and room. When `url_bel` is false the screening is sold elsewhere and `url_autre_bel` holds that link (festival screenings).
+- The crawl is one request for today plus one per further day inside the horizon (about 60 for the default 60 days, roughly 370 KB each). The three venues run concurrently in one ingest and share a single crawl.
+- There is an `original_title` field on the film page's data (`/en/films/<slug>/__data.json`), but it was empty on the pages inspected and would cost one request per film, so it is not fetched.
 
 ## Payload acceptance checklist
 

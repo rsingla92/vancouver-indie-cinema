@@ -39,6 +39,13 @@ describe("parseDateTime", () => {
     expect(parseDateTime("March 1 2027 7:00 pm", ["LLLL d yyyy h:mm a"], { reference: reference("2026-09-15") }).year).toBe(2027);
   });
 
+  it("parses in another zone when asked, with the same year inference", () => {
+    const toronto = parseDateTime("Sat Jan 2 7:00 pm", ["ccc LLL d h:mm a"], { reference: reference("2026-12-28"), zone: "America/Toronto" });
+    expect(toronto.toISO()).toBe("2027-01-02T19:00:00.000-05:00");
+    expect(toronto.zoneName).toBe("America/Toronto");
+    expect(() => parseDateTime("nope", ["LLL d h:mm a"], { zone: "America/Toronto" })).toThrow(/America\/Toronto date\/time/);
+  });
+
   it("honours a fixed year option", () => {
     expect(parseDateTime("September 22 7:00 pm", ["LLLL d h:mm a"], { year: 2026 }).toISO()).toBe("2026-09-22T19:00:00.000-07:00");
   });

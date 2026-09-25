@@ -1,8 +1,8 @@
 import { DateTime } from "luxon";
 
 export const VANCOUVER_TZ = "America/Vancouver";
-
-const PARSE_OPTIONS = { zone: VANCOUVER_TZ, locale: "en-CA" } as const;
+/** Toronto and Montreal share the Eastern zone. */
+export const TORONTO_TZ = "America/Toronto";
 
 /** A listing is never this far from the crawl date; a weekday that only fits a year away is a typo. */
 const MAX_DISTANCE_DAYS = 200;
@@ -33,7 +33,8 @@ function formatHasYear(format: string): boolean {
 }
 
 /**
- * Parse a venue-local date/time string with one of the given Luxon formats.
+ * Parse a venue-local date/time string with one of the given Luxon formats. The
+ * zone defaults to Vancouver; Toronto and Montreal venues pass `TORONTO_TZ`.
  *
  * - Formats that already contain a year token are parsed verbatim.
  * - Otherwise the year is inferred relative to `reference` (or fixed with `year`).
@@ -44,22 +45,24 @@ function formatHasYear(format: string): boolean {
 export function parseDateTime(
   value: string,
   formats: string[],
-  options: { year?: number; reference?: DateTime } = {},
+  options: { year?: number; reference?: DateTime; zone?: string; locale?: string } = {},
 ): DateTime {
-  const reference = options.reference ?? DateTime.now().setZone(VANCOUVER_TZ);
+  const zone = options.zone ?? VANCOUVER_TZ;
+  const parseOptions = { zone, locale: options.locale ?? "en-CA" };
+  const reference = (options.reference ?? DateTime.now()).setZone(zone);
   const candidateYears = options.year !== undefined
     ? [options.year]
     : [reference.year - 1, reference.year, reference.year + 1];
 
   for (const format of formats) {
     if (formatHasYear(format)) {
-      const parsed = DateTime.fromFormat(value, format, PARSE_OPTIONS);
+      const parsed = DateTime.fromFormat(value, format, parseOptions);
       if (parsed.isValid) return parsed;
       continue;
     }
 
     const valid = candidateYears
-      .map((year) => DateTime.fromFormat(`${value} ${year}`, `${format} yyyy`, PARSE_OPTIONS))
+      .map((year) => DateTime.fromFormat(`${value} ${year}`, `${format} yyyy`, parseOptions))
       .filter((parsed) => parsed.isValid)
       .filter((parsed) => options.year !== undefined || Math.abs(parsed.diff(reference, "days").days) <= MAX_DISTANCE_DAYS)
       .sort((a, b) => Math.abs(a.diff(reference, "days").days) - Math.abs(b.diff(reference, "days").days));
@@ -68,7 +71,7 @@ export function parseDateTime(
     return valid.find((parsed) => parsed.year === inferYear(parsed.month, reference)) ?? valid[0]!;
   }
 
-  throw new Error(`Unable to parse Vancouver date/time: ${value}`);
+  throw new Error(`Unable to parse ${zone} date/time: ${value}`);
 }
 
 export function iso(dateTime: DateTime): string {

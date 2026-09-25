@@ -9,7 +9,7 @@ const showtime = (sourceUid: string, rawTitle = "Tony"): ExtractedShowtime => ({
 });
 const batch = (showtimes: ExtractedShowtime[], warnings: string[] = []): ExtractionBatch => ({ venueSlug: "rio-theatre", fetchedAt: "2026-09-21T00:00:00Z", showtimes, warnings });
 
-function harness(mergeImpl?: (input: MergeInput) => Promise<{ status: "matched"; movieId: string; showtimeId: string } | { status: "review" }>) {
+function harness(mergeImpl?: (input: MergeInput) => Promise<{ status: "matched"; movieId: string; showtimeId: string } | { status: "review", showtimeId: null }>) {
   const repository = {
     findTheatreId: vi.fn(async (slug: string) => (slug === "rio-theatre" ? "theatre-1" : null)),
     startRun: vi.fn(async () => "run-1"),
@@ -60,7 +60,7 @@ describe("ingestVenue", () => {
   it("isolates per-item merge failures", async () => {
     const { dependencies, repository } = harness(async (input) => {
       if (input.item.sourceUid === "bad") throw new Error("boom");
-      return { status: "review" };
+      return { status: "review", showtimeId: null };
     });
     const report = await ingestVenue("rio-theatre", dependencies, { now, extractors: { "rio-theatre": async () => batch([showtime("good"), showtime("bad")]) } });
 

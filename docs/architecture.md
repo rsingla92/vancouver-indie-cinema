@@ -49,7 +49,7 @@ vancouver-indie-cinema/
 
 1. An extractor emits a `raw_source_items` record with the original payload and a stable source key.
 2. A deterministic normalization pass extracts a core title, optional year, event flags, and confidence. The rules version and full output are retained on the raw item so a rules change can be replayed and audited.
-3. TMDB candidates are evaluated. Automatic linking requires a configurable confidence threshold; uncertain records remain reviewable instead of being forced into a wrong movie.
+3. TMDB candidates are evaluated. Automatic linking requires a configurable confidence threshold; an uncertain record is listed under its own title, without a movie, rather than forced into a wrong one, and stays reviewable.
 4. A canonical `movies` row is created or reused. A partial unique index ensures one row per TMDB movie.
 5. A `showtimes` row links the movie, theatre, and source item. Its external ticket URL is the only purchase CTA.
 6. Format and experience labels such as `35mm`, `Q&A`, `Live Score`, or `Members Only` are normalized into reusable `tags` joined through `showtime_tags`.

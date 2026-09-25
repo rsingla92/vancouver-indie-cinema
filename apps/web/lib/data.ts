@@ -44,7 +44,9 @@ export async function getShowtimes(days = DEFAULT_DAYS): Promise<ShowtimesResult
   }
 
   const rows = await sql<ShowtimeRow[]>`
-    select s.id::text, m.id::text as "movieId", m.title, m.release_year as year,
+    select s.id::text,
+      coalesce(m.id::text, 'listing:' || lower(s.display_title)) as "movieId",
+      coalesce(m.title, s.display_title) as title, m.release_year as year,
       coalesce(m.synopsis, '') as synopsis,
       case when m.poster_path is null then '' else 'https://image.tmdb.org/t/p/w500' || m.poster_path end as "posterUrl",
       case when m.backdrop_path is null then '' else 'https://image.tmdb.org/t/p/w1280' || m.backdrop_path end as "backdropUrl",
@@ -52,7 +54,7 @@ export async function getShowtimes(days = DEFAULT_DAYS): Promise<ShowtimesResult
       s.starts_at as "startsAt", s.ticket_url as "ticketUrl", s.status,
       coalesce(array_agg(tag.label order by tag.label) filter (where tag.id is not null), '{}') as tags
     from showtimes s
-      join movies m on m.id = s.movie_id
+      left join movies m on m.id = s.movie_id
       join theatres t on t.id = s.theatre_id
       left join showtime_tags st on st.showtime_id = s.id
       left join tags tag on tag.id = st.tag_id

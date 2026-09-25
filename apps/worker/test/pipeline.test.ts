@@ -29,7 +29,7 @@ describe("stablePayloadHash", () => {
 describe("processShowtime", () => {
   const dependencies = (result: NormalizedTitle, movies: TmdbMovie[] = []) => {
     const search = vi.fn(async () => movies);
-    const merge = vi.fn(async (_input: MergeInput) => ({ status: "review" as const }));
+    const merge = vi.fn(async (_input: MergeInput) => ({ status: "review" as const, showtimeId: null }));
     return { deps: { normalizer: { normalize: () => result }, tmdb: { search }, repository: { merge }, rulesVersion: "test" }, search, merge };
   };
 

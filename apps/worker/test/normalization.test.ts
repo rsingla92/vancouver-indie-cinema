@@ -65,6 +65,7 @@ describe("deterministic title normalization", () => {
   it("does not send non-film events to movie matching", () => {
     expect(normalizer.normalize("Friday Night Live Comedy Night").contentKind).toBe("non_film");
     expect(normalizer.normalize("Halloween Party with DJ").contentKind).toBe("non_film");
+    expect(normalizer.normalize("Private Event").contentKind).toBe("non_film");
   });
 });
 

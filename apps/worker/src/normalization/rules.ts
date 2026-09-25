@@ -26,6 +26,7 @@ export const NON_FILM_PATTERNS = [
   /\b(?:concert(?!\s+(?:film|doc|documentary|movie))|workshop|lecture|panel\s+discussion|book\s+launch|stand-?up\s+comedy)\b/i,
   /\b(?:dance|after|release|launch|costume|halloween|new\s+year'?s?(?:\s+eve)?|listening|album)\s+party\b/i,
   /\blive\s+(?:music|podcast|performance|comedy|taping|reading)\b/i,
+  /\bprivate\s+(?:event|screening|rental|function)\b/i,
 ];
 
 /** Venue series and event labels that precede or accompany a title. */

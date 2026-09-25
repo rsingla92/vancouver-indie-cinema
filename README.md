@@ -50,7 +50,7 @@ npm run ingest -- --days=30 --venues=rio-theatre  # narrower run
 
 For each venue the job records an `ingestion_runs` row, fetches the schedule, normalizes every title, links confident TMDB matches, and upserts `showtimes`. Future showtimes that a complete extraction no longer lists are marked inactive; history is never deleted. Venue slugs are `rio-theatre`, `park-theatre`, `the-cinematheque`, `viff-centre`, and `hollywood-theatre`. The Rio and the Park share one adapter for the Barker events plugin their sites run.
 
-The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is persisted only when the leading candidate clears both the confidence threshold and ambiguity margin; uncertain items remain in `raw_source_items` with `normalization_status = 'review'`.
+The normalizer strips known venue prefixes, series labels, and format/event suffixes, extracts a release year only when the listing sets one apart (for example `(1978)`), then ranks TMDB results by title similarity, year agreement, and popularity. A movie is linked only when the leading candidate clears both the confidence threshold and ambiguity margin. Uncertain screenings are still listed, under the title the venue printed and without poster or synopsis, and stay flagged in `raw_source_items` with `normalization_status = 'review'`; events the rules recognise as not a film are not listed.
 
 ## Hosting
 

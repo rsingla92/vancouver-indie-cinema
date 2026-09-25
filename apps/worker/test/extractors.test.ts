@@ -119,6 +119,18 @@ describe("Hollywood Theatre", () => {
     expect(showtime).toMatchObject({ tags: ["music"], startsAt: "2027-03-01T19:00:00-08:00" });
   });
 
+  it("finds the date in the page when the description no longer carries it", () => {
+    const prose = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><div>Friday, October 3rd, 2026</div><p>DOORS: 6:00pm // SHOW: 7:00pm</p>`;
+    expect(parseHollywoodEventPage(prose, "https://www.hollywoodtheatre.ca/events/x").showtimes[0]?.startsAt).toBe("2026-10-03T19:00:00-07:00");
+
+    const structured = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><time datetime="2026-10-03T19:00:00-07:00">Oct 3</time><p>SHOW: 7:00pm</p>`;
+    expect(parseHollywoodEventPage(structured, "https://www.hollywoodtheatre.ca/events/x").showtimes[0]?.startsAt).toBe("2026-10-03T19:00:00-07:00");
+
+    const noYear = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><div>Sat, Oct 3</div><p>SHOW: 9:30pm</p>`;
+    const reference = DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" });
+    expect(parseHollywoodEventPage(noYear, "https://www.hollywoodtheatre.ca/events/x", reference).showtimes[0]?.startsAt).toBe("2026-10-03T21:30:00-07:00");
+  });
+
   it("excludes non-film events", () => {
     const html = `<meta name="description" content="Concert September 30, 2026 at Hollywood Theatre"><h1 class="heading-events">Concert</h1><a href="/categories/music">Music</a><p>SHOW: 7:00pm</p>`;
     expect(parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/concert")).toEqual({ showtimes: [] });

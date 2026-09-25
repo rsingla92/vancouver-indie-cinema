@@ -1,4 +1,5 @@
-import { load } from "cheerio";
+import { load, type CheerioAPI } from "cheerio";
+import type { DateTime } from "luxon";
 import { extractedShowtimeSchema, type ExtractionBatch, type ExtractedShowtime } from "../contracts.js";
 import { fetchText } from "../http.js";
 import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime } from "./utils.js";
@@ -20,7 +21,43 @@ export function parseHollywoodEventLinks(html: string): string[] {
   )];
 }
 
-export function parseHollywoodEventPage(html: string, pageUrl: string): HollywoodPageResult {
+const MONTHS: Record<string, string> = {
+  jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June", jul: "July",
+  aug: "August", sep: "September", sept: "September", oct: "October", nov: "November", dec: "December",
+};
+const WRITTEN_DATE = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i;
+const ISO_DATE = /\b(\d{4}-\d{2}-\d{2})\b/;
+
+interface EventDate {
+  /** "2026-10-03", "October 3 2026" or "October 3". */
+  text: string;
+  format: string;
+}
+
+/**
+ * The site's templates move the date around: it has lived in the meta description
+ * and can appear as structured data or plain prose. Structured dates win; prose is
+ * searched from the most specific source to the whole page.
+ */
+function findEventDate($: CheerioAPI, description: string, bodyText: string): EventDate | null {
+  const structured = [
+    ...$("time[datetime]").map((_, element) => $(element).attr("datetime") ?? "").get(),
+    ...$("script[type='application/ld+json']").map((_, element) => $(element).text()).get(),
+  ];
+  for (const text of structured) {
+    const iso = text.match(ISO_DATE);
+    if (iso) return { text: iso[1]!, format: "yyyy-MM-dd" };
+  }
+  for (const text of [description, $("meta[property='og:description']").attr("content") ?? "", bodyText]) {
+    const match = text.match(WRITTEN_DATE);
+    if (!match) continue;
+    const month = MONTHS[match[1]!.toLowerCase().slice(0, 4).replace(/[^a-z]/g, "")] ?? MONTHS[match[1]!.toLowerCase().slice(0, 3)]!;
+    return match[3] ? { text: `${month} ${match[2]} ${match[3]}`, format: "LLLL d yyyy" } : { text: `${month} ${match[2]}`, format: "LLLL d" };
+  }
+  return null;
+}
+
+export function parseHollywoodEventPage(html: string, pageUrl: string, reference?: DateTime): HollywoodPageResult {
   const $ = load(html);
   const categories = $("a[href^='/categories/']")
     .map((_, element) => cleanText($(element).text()).toLowerCase())
@@ -29,12 +66,12 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Hollywoo
 
   const rawTitle = cleanText($("h1.heading-events").first().text() || $("title").text().split(" at Hollywood")[0]);
   const description = $("meta[name='description']").attr("content") ?? "";
-  const dateMatch = description.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i);
-  if (!rawTitle) return { showtimes: [], warning: `${pageUrl}: film page has no title` };
-  if (!dateMatch) return { showtimes: [], warning: `${pageUrl}: film page has no recognisable date` };
-
   // Join text nodes with spaces so adjacent elements never fuse into one word.
   const bodyText = cleanText($("body *").contents().filter((_, node) => node.type === "text").map((_, node) => $(node).text()).get().join(" "));
+  if (!rawTitle) return { showtimes: [], warning: `${pageUrl}: film page has no title` };
+  const date = findEventDate($, description, bodyText);
+  if (!date) return { showtimes: [], warning: `${pageUrl}: film page has no recognisable date (description: "${description.slice(0, 120)}")` };
+
   const showTimes = [...bodyText.matchAll(/\bSHOW\s*:\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/gi)]
     .map((match) => match[1]!.replaceAll(".", "").replace(/\s*(am|pm)$/i, " $1"));
   const uniqueTimes = [...new Set(showTimes)];
@@ -45,7 +82,7 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Hollywoo
   const slug = new URL(pageUrl).pathname.split("/").filter(Boolean).at(-1)!;
 
   const showtimes = uniqueTimes.map((time, index) => {
-    const startsAt = parseDateTime(`${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3]} ${time}`, ["LLLL d yyyy h:mm a", "LLLL d yyyy h a"]);
+    const startsAt = parseDateTime(`${date.text} ${time}`, [`${date.format} h:mm a`, `${date.format} h a`], reference ? { reference } : {});
     return extractedShowtimeSchema.parse({
       venueSlug: "hollywood-theatre",
       sourceUid: `${slug}:${index}:${startsAt.toISO()}`,
@@ -54,7 +91,7 @@ export function parseHollywoodEventPage(html: string, pageUrl: string): Hollywoo
       detailUrl: pageUrl,
       ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
       tags: categories.filter((category) => category !== "film"),
-      sourcePayload: { description, categories, showTimeText: time },
+      sourcePayload: { description, categories, dateText: date.text, showTimeText: time },
     });
   });
   return { showtimes };

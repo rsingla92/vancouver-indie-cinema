@@ -95,4 +95,24 @@ suite("CinemaRepository against Postgres", () => {
     const counts = await sql<{ active: number }[]>`select count(*)::int as active from showtimes where source_uid like 'int-r%' and is_active`;
     expect(counts[0]?.active).toBe(8);
   });
+
+  it("lists an unmatched film under the venue's title and skips a non-film event", async () => {
+    const listed = await repository.merge({
+      item: item({ sourceUid: "int-2", rawTitle: "Total Recall (4K Restoration)" }),
+      normalized: { coreTitle: "Total Recall", releaseYear: null, contentKind: "film", tags: ["restoration"], confidence: 0.9, note: "" },
+      candidate: null, payloadHash: "h3", rulesVersion: "t",
+    });
+    expect(listed).toEqual({ status: "review", showtimeId: expect.any(String) });
+    const [row] = await sql<{ movie_id: string | null; display_title: string }[]>`select movie_id, display_title from showtimes where source_uid = 'int-2'`;
+    expect(row).toEqual({ movie_id: null, display_title: "Total Recall" });
+    expect(await tagsFor("int-2")).toEqual(["q-a-with-director", "restoration"]);
+
+    const skipped = await repository.merge({
+      item: item({ sourceUid: "int-3", rawTitle: "Private Event" }),
+      normalized: { coreTitle: "Private Event", releaseYear: null, contentKind: "non_film", tags: [], confidence: 0.9, note: "" },
+      candidate: null, payloadHash: "h4", rulesVersion: "t",
+    });
+    expect(skipped).toEqual({ status: "review", showtimeId: null });
+    expect((await sql`select 1 from showtimes where source_uid = 'int-3'`).length).toBe(0);
+  });
 });

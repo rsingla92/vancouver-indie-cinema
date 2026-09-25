@@ -13,7 +13,8 @@ export interface MergeInput {
 
 export type MergeResult =
   | { status: "matched"; movieId: string; showtimeId: string }
-  | { status: "review" };
+  /** No confident film. The screening is still listed under its own title unless it is not a film or has no link. */
+  | { status: "review"; showtimeId: string | null };
 
 export type IngestionRunStatus = "succeeded" | "partial" | "failed";
 
@@ -101,19 +102,6 @@ async function upsertRawItem(sql: Tx, theatreId: string, input: MergeInput): Pro
   return rows[0]!.id;
 }
 
-/**
- * No confident film today, but a showtime linked on an earlier run must still follow
- * the source: keep its film, refresh everything the venue publishes.
- */
-async function refreshUnmatchedShowtime(sql: Tx, theatreId: string, rawId: string, item: ExtractedShowtime, ticketUrl: string | null): Promise<void> {
-  await sql`
-    update showtimes set raw_source_item_id = ${rawId}, display_title = ${item.rawTitle},
-      starts_at = ${item.startsAt}, ends_at = ${item.endsAt ?? null},
-      ticket_url = coalesce(${ticketUrl}, ticket_url), status = ${item.status},
-      is_active = true, last_seen_at = now()
-    where theatre_id = ${theatreId} and source_uid = ${item.sourceUid}`;
-}
-
 async function upsertMovie(sql: Tx, movie: TmdbMovie, fallbackYear: number | null): Promise<string> {
   const releaseYear = movie.release_date ? Number(movie.release_date.slice(0, 4)) : fallbackYear;
   const rows = await sql<{ id: string }[]>`
@@ -128,13 +116,17 @@ async function upsertMovie(sql: Tx, movie: TmdbMovie, fallbackYear: number | nul
   return rows[0]!.id;
 }
 
-async function upsertShowtime(sql: Tx, ids: { theatreId: string; movieId: string; rawId: string }, item: ExtractedShowtime, ticketUrl: string): Promise<string> {
+/**
+ * Insert or refresh the screening. A film linked on an earlier run is kept when this
+ * run could not match, so a flaky TMDB search never strips a listing of its poster.
+ */
+async function upsertShowtime(sql: Tx, ids: { theatreId: string; movieId: string | null; rawId: string }, item: ExtractedShowtime, displayTitle: string, ticketUrl: string): Promise<string> {
   const rows = await sql<{ id: string }[]>`
     insert into showtimes (theatre_id, movie_id, raw_source_item_id, source_uid, display_title, starts_at, ends_at,
       ticket_url, status, last_seen_at)
-    values (${ids.theatreId}, ${ids.movieId}, ${ids.rawId}, ${item.sourceUid}, ${item.rawTitle},
+    values (${ids.theatreId}, ${ids.movieId}, ${ids.rawId}, ${item.sourceUid}, ${displayTitle},
       ${item.startsAt}, ${item.endsAt ?? null}, ${ticketUrl}, ${item.status}, now())
-    on conflict (theatre_id, source_uid) do update set movie_id = excluded.movie_id,
+    on conflict (theatre_id, source_uid) do update set movie_id = coalesce(excluded.movie_id, showtimes.movie_id),
       raw_source_item_id = excluded.raw_source_item_id, display_title = excluded.display_title,
       starts_at = excluded.starts_at, ends_at = excluded.ends_at, ticket_url = excluded.ticket_url,
       status = excluded.status, is_active = true, last_seen_at = now()
@@ -225,16 +217,17 @@ export class CinemaRepository {
       const ticketUrl = httpsOrNull(input.item.ticketUrl) ?? httpsOrNull(input.item.detailUrl);
       const rawId = await upsertRawItem(sql, theatreId, input);
 
-      if (!input.candidate) {
-        await refreshUnmatchedShowtime(sql, theatreId, rawId, input.item, ticketUrl);
-        return { status: "review" };
+      if (!ticketUrl) {
+        if (input.candidate) throw new Error(`No https ticket or detail URL for ${input.item.venueSlug}/${input.item.sourceUid}`);
+        return { status: "review", showtimeId: null };
       }
-      if (!ticketUrl) throw new Error(`No https ticket or detail URL for ${input.item.venueSlug}/${input.item.sourceUid}`);
+      // An unmatched screening is listed under the venue's own title; a non-film event is not listed at all.
+      if (!input.candidate && input.normalized.contentKind === "non_film") return { status: "review", showtimeId: null };
 
-      const movieId = await upsertMovie(sql, input.candidate.movie, input.normalized.releaseYear);
-      const showtimeId = await upsertShowtime(sql, { theatreId, movieId, rawId }, input.item, ticketUrl);
+      const movieId = input.candidate ? await upsertMovie(sql, input.candidate.movie, input.normalized.releaseYear) : null;
+      const showtimeId = await upsertShowtime(sql, { theatreId, movieId, rawId }, input.item, input.normalized.coreTitle, ticketUrl);
       await syncTags(sql, showtimeId, [...input.item.tags, ...input.normalized.tags]);
-      return { status: "matched", movieId, showtimeId };
+      return movieId ? { status: "matched", movieId, showtimeId } : { status: "review", showtimeId };
     });
   }
 

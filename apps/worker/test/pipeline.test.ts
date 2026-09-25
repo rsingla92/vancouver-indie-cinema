@@ -38,6 +38,21 @@ describe("processShowtime", () => {
     await processShowtime(item, deps, { ingestionRunId: "run-1" });
     expect(search).toHaveBeenCalledOnce();
     expect(merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: expect.objectContaining({ movie: tmdbMovie }), ingestionRunId: "run-1", rulesVersion: "test" }));
+    expect(merge.mock.calls[0]?.[0]).not.toHaveProperty("refusal");
+  });
+
+  it("uses the year the venue printed when the title has none, and records why a match was refused", async () => {
+    const { deps, search, merge } = dependencies(normalized({ releaseYear: null }), [tmdbMovie]);
+    await processShowtime({ ...item, releaseYear: 2009 }, deps);
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ releaseYear: 2009 }));
+    expect(merge).toHaveBeenCalledWith(expect.objectContaining({ normalized: expect.objectContaining({ releaseYear: 2009 }) }));
+
+    const refused = dependencies(normalized({ releaseYear: null }), []);
+    await processShowtime(item, refused.deps);
+    expect(refused.merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, refusal: "refused: TMDB returned no candidates" }));
+    const skipped = dependencies(normalized({ contentKind: "non_film" }), []);
+    await processShowtime(item, skipped.deps);
+    expect(skipped.merge).toHaveBeenCalledWith(expect.objectContaining({ refusal: "not searched: non_film" }));
   });
 
   it("skips TMDB for non-film and low-confidence titles", async () => {

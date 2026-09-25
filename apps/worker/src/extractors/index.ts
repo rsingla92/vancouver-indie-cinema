@@ -8,7 +8,7 @@ import { extractViff } from "./viff.js";
 export { extractBarker, parseBarkerPayload, PARK_THEATRE, RIO_THEATRE, type BarkerOptions, type BarkerVenue, type ParsedBarkerPayload } from "./barker.js";
 export { extractRio, parseRioPayload } from "./rio.js";
 export { extractPark, parseParkPayload } from "./park.js";
-export { extractCinematheque, parseCinemathequeFilmLinks, parseCinemathequeFilmPage } from "./cinematheque.js";
+export { extractCinematheque, parseCinemathequeFilmLinks, parseCinemathequeFilmPage, parseFilmYear } from "./cinematheque.js";
 export { extractViff, parseViffPage } from "./viff.js";
 export { extractHollywood, parseHollywoodEventLinks, parseHollywoodEventPage } from "./hollywood.js";
 

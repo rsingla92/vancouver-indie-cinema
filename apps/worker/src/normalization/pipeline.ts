@@ -3,7 +3,7 @@ import type { ExtractedShowtime } from "../contracts.js";
 import type { TitleNormalizer } from "./contracts.js";
 import { DeterministicTitleNormalizer, NORMALIZATION_RULES_VERSION } from "./normalizer.js";
 import { CinemaRepository, type MergeResult } from "./repository.js";
-import { confidentMatch, rankCandidates, TmdbClient } from "./tmdb.js";
+import { confidentMatch, explainRefusal, rankCandidates, TmdbClient } from "./tmdb.js";
 
 /** Normalizations below this confidence are never auto-matched against TMDB. */
 export const MIN_NORMALIZATION_CONFIDENCE = 0.7;
@@ -47,14 +47,19 @@ export async function processShowtime(
   dependencies: PipelineDependencies,
   context: ProcessContext = {},
 ): Promise<MergeResult> {
-  const normalized = dependencies.normalizer.normalize(item.rawTitle);
+  const fromTitle = dependencies.normalizer.normalize(item.rawTitle);
+  // A year printed in the title wins; otherwise one the venue states elsewhere on the page.
+  const normalized = { ...fromTitle, releaseYear: fromTitle.releaseYear ?? item.releaseYear ?? null };
   const eligible = normalized.contentKind === "film" && normalized.confidence >= MIN_NORMALIZATION_CONFIDENCE;
-  const candidate = eligible ? confidentMatch(rankCandidates(normalized, await dependencies.tmdb.search(normalized))) : null;
+  const ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized)) : [];
+  const candidate = eligible ? confidentMatch(ranked) : null;
+  const refusal = candidate ? null : eligible ? explainRefusal(ranked) : `not searched: ${normalized.contentKind === "film" ? "low normalization confidence" : normalized.contentKind}`;
 
   return dependencies.repository.merge({
     item,
     normalized,
     candidate,
+    ...(refusal ? { refusal } : {}),
     payloadHash: stablePayloadHash(item),
     rulesVersion: dependencies.rulesVersion,
     ...(context.ingestionRunId ? { ingestionRunId: context.ingestionRunId } : {}),

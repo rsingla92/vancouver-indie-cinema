@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { confidentMatch, rankCandidates, titleSimilarity } from "../src/normalization/tmdb.js";
+import { confidentMatch, explainRefusal, rankCandidates, titleSimilarity } from "../src/normalization/tmdb.js";
 import type { NormalizedTitle, TmdbMovie } from "../src/normalization/contracts.js";
 import { DeterministicTitleNormalizer } from "../src/normalization/normalizer.js";
 
@@ -107,5 +107,12 @@ describe("TMDB matching", () => {
     expect(confidentMatch(rankCandidates(akira, [movie(1, "Akira", "1988", 60), movie(2, "Akira", "2016", 4)]))?.movie.id).toBe(1);
     const recall: NormalizedTitle = { ...input, coreTitle: "Total Recall", releaseYear: null, tags: [] };
     expect(confidentMatch(rankCandidates(recall, [movie(1, "Total Recall", "1990", 40), movie(2, "Total Recall", "2012", 30)]))).toBeNull();
+  });
+
+  it("explains a refusal", () => {
+    const recall: NormalizedTitle = { ...input, coreTitle: "Total Recall", releaseYear: null, tags: [] };
+    expect(explainRefusal(rankCandidates(recall, [movie(1, "Total Recall", "1990", 40), movie(2, "Total Recall", "2012", 30)]))).toMatch(/^refused: best "Total Recall" \(1990\) 0\.\d{3} and runner-up "Total Recall" \(2012\) 0\.\d{3} are within 0\.08$/);
+    expect(explainRefusal(rankCandidates(input, [movie(1, "Making Sense of It All", "1999")]))).toMatch(/^refused: best .* is below 0\.82$/);
+    expect(explainRefusal([])).toBe("refused: TMDB returned no candidates");
   });
 });

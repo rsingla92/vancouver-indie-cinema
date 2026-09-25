@@ -12,10 +12,20 @@ const BASE = "https://thecinematheque.ca";
  * settles the December-to-January boundary; the programme year in the page URL
  * is deliberately not used because a page can list screenings in the next year.
  */
+/** "Japan 1962. Dir: Masaki Kobayashi. 133 min." The year closest before the director credit. */
+const YEAR_BEFORE_DIRECTOR = /\b((?:18|19|20)\d{2})\b(?:(?!\b(?:18|19|20)\d{2}\b)[\s\S]){0,60}?\bdir(?:\.|:|ector)/i;
+
+export function parseFilmYear(text: string, maxYear: number): number | null {
+  const match = text.match(YEAR_BEFORE_DIRECTOR);
+  const year = match ? Number(match[1]) : NaN;
+  return year >= 1888 && year <= maxYear ? year : null;
+}
+
 export function parseCinemathequeFilmPage(html: string, pageUrl: string, reference?: DateTime): ExtractedShowtime[] {
   const $ = load(html);
   const rawTitle = cleanText($(".filmTitle").first().text() || $("h1").first().text() || $("title").text().split("|")[0]);
   const now = reference ?? DateTime.now().setZone(VANCOUVER_TZ);
+  const releaseYear = parseFilmYear(cleanText($("body").text()), now.year + 1);
   const output: ExtractedShowtime[] = [];
 
   $("#screeningDates a[href*='evtinfo=']").each((_, element) => {
@@ -33,6 +43,7 @@ export function parseCinemathequeFilmPage(html: string, pageUrl: string, referen
       sourceUid: evtInfo ?? `${new URL(pageUrl).pathname}:${startsAt.toISO()}`,
       rawTitle,
       startsAt: iso(startsAt),
+      ...(releaseYear ? { releaseYear } : {}),
       detailUrl: pageUrl,
       ticketUrl,
       tags: [],

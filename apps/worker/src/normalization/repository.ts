@@ -6,6 +6,8 @@ export interface MergeInput {
   item: ExtractedShowtime;
   normalized: NormalizedTitle;
   candidate: RankedCandidate | null;
+  /** Why there is no candidate, for the review queue. */
+  refusal?: string;
   payloadHash: string;
   rulesVersion: string;
   ingestionRunId?: string;
@@ -86,7 +88,7 @@ async function upsertRawItem(sql: Tx, theatreId: string, input: MergeInput): Pro
       ${sql.json(payload)}, ${input.payloadHash}, ${normalized.coreTitle},
       ${normalized.releaseYear}, ${normalized.confidence}, 'deterministic', ${input.rulesVersion},
       ${sql.json(normalized)}, ${candidate ? "matched" : "review"}, ${candidate?.movie.id ?? null},
-      ${candidate?.score ?? null}, ${candidate?.reason ?? NO_CANDIDATE_REASON},
+      ${candidate?.score ?? null}, ${candidate?.reason ?? input.refusal ?? NO_CANDIDATE_REASON},
       ${candidate ? sql`now()` : null})
     on conflict (theatre_id, source_uid, payload_hash) do update set
       fetched_at = now(),

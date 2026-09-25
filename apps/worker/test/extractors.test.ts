@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { venueSlugSchema } from "../src/contracts.js";
 import {
   parseCinemathequeFilmPage,
+  parseFilmYear,
   parseHollywoodEventPage,
   parseParkPayload,
   parseRioPayload,
@@ -77,6 +78,14 @@ describe("The Cinematheque", () => {
     const [tomorrow] = parseCinemathequeFilmPage(page("Tomorrow", ""), "https://thecinematheque.ca/films/2026/downpour", reference);
     expect(today?.startsAt).toBe("2026-09-21T19:00:00-07:00");
     expect(tomorrow?.startsAt).toBe("2026-09-22T19:00:00-07:00");
+  });
+
+  it("carries the year printed beside the director credit", () => {
+    const withMeta = page("September 22", "Tuesday").replace("<section", '<p class="meta">Japan 1962. Dir: Masaki Kobayashi. 133 min. 35mm</p><section');
+    expect(parseCinemathequeFilmPage(withMeta, "https://thecinematheque.ca/films/2026/harakiri", reference)[0]?.releaseYear).toBe(1962);
+    expect(parseCinemathequeFilmPage(page("September 22", "Tuesday"), "https://thecinematheque.ca/films/2026/harakiri", reference)[0]?.releaseYear).toBeUndefined();
+    expect(parseFilmYear("Programme 2026. Japan 1962. Dir: Masaki Kobayashi.", 2027)).toBe(1962);
+    expect(parseFilmYear("Sept 2026 season. No credit here.", 2027)).toBeNull();
   });
 
   it("falls back to the date alone when the printed weekday is wrong", () => {

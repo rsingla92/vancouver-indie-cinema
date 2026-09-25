@@ -35,6 +35,17 @@ export function confidentMatch(ranked: RankedCandidate[]): RankedCandidate | nul
   return first;
 }
 
+/** Why `confidentMatch` returned null, kept on the raw item for the review queue. */
+export function explainRefusal(ranked: RankedCandidate[]): string {
+  const [first, second] = ranked;
+  const describe = (candidate: RankedCandidate) =>
+    `"${candidate.movie.title}" (${candidate.movie.release_date?.slice(0, 4) || "no date"}) ${candidate.score.toFixed(3)}`;
+  if (!first) return "refused: TMDB returned no candidates";
+  if (first.score < MATCH_THRESHOLD) return `refused: best ${describe(first)} is below ${MATCH_THRESHOLD}`;
+  if (second) return `refused: best ${describe(first)} and runner-up ${describe(second)} are within ${AMBIGUITY_MARGIN}`;
+  return "refused";
+}
+
 /**
  * Same-title films differ only in popularity when the listing gives no year. A
  * remake with a following of its own stays ambiguous; an obscure namesake does not.

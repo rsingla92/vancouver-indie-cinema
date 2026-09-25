@@ -1,0 +1,78 @@
+[
+ {
+  "id": 305581,
+  "modified": "2026-09-24T20:15:56",
+  "slug": "sold-out-the-rocky-horror-picture-show-w-shadowcast",
+  "link": "https://www.foxtheatre.ca/movies/sold-out-the-rocky-horror-picture-show-w-shadowcast/",
+  "title": {
+   "rendered": "SOLD OUT &#8211; The Rocky Horror Picture Show w/Shadowcast!"
+  },
+  "class_list": [
+   "post-305581",
+   "movies",
+   "type-movies",
+   "status-publish",
+   "has-post-thumbnail",
+   "hentry",
+   "event-date-2026-10-23",
+   "genre-comedy",
+   "genre-fantasy",
+   "genre-horror",
+   "genre-science-fiction",
+   "theather_series-all-events",
+   "theather_series-all-films",
+   "theather_series-sing-along-cinema"
+  ]
+ },
+ {
+  "id": 1156262,
+  "modified": "2026-09-24T20:15:31",
+  "slug": "klassic-kidz-paranorman",
+  "link": "https://www.foxtheatre.ca/movies/klassic-kidz-paranorman/",
+  "title": {
+   "rendered": "Klassic Kidz: ParaNorman"
+  },
+  "class_list": [
+   "post-1156262",
+   "movies",
+   "type-movies",
+   "status-publish",
+   "has-post-thumbnail",
+   "hentry",
+   "event-date-2026-10-10",
+   "event-date-2026-10-12",
+   "genre-adventure",
+   "genre-animation",
+   "genre-comedy",
+   "genre-family",
+   "theather_series-all-films",
+   "theather_series-klassic-kidz"
+  ]
+ },
+ {
+  "id": 290536,
+  "modified": "2026-09-24T15:43:48",
+  "slug": "temporarily-closed",
+  "link": "https://www.foxtheatre.ca/movies/temporarily-closed/",
+  "title": {
+   "rendered": "Temporarily Closed For Concessions Renovations"
+  },
+  "class_list": [
+   "post-290536",
+   "movies",
+   "type-movies",
+   "status-publish",
+   "has-post-thumbnail",
+   "hentry",
+   "event-date-2026-09-24",
+   "event-date-2026-09-25",
+   "event-date-2026-09-26",
+   "event-date-2026-09-27",
+   "event-date-2026-09-28",
+   "event-date-2026-09-29",
+   "event-date-2026-09-30",
+   "event-date-2026-10-01",
+   "movie_types-regular-screening"
+  ]
+ }
+]

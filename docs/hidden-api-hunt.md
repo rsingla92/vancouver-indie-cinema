@@ -30,6 +30,8 @@ Reject analytics, ad, newsletter, CAPTCHA, and payment calls. A schedule source 
 | VIFF Centre | WordPress listings + Elevent embedded booking widget | Server-rendered What's On pages; Elevent only for availability/detail gaps | High |
 | Hollywood Theatre | Webflow CMS + Finsweet CMS pagination | Webflow listing HTML and pagination URLs | High |
 | Cinéma du Parc, Cinéma Beaubien, Cinéma du Musée | One SvelteKit site, cinemacinema.ca | `/en/schedule/__data.json?date=YYYY-MM-DD` (JSON, one day per request) | High |
+| Revue Cinema | WordPress (Bricks) + Agile Ticketing | FullCalendar events array on `/calendar/`; Agile link from each film page | High |
+| Fox Theatre | WordPress (Elementor) + Agile Ticketing | `/wp-json/wp/v2/movies` for the films, each film page for times and Agile links | High |
 
 ## Rio Theatre
 
@@ -165,6 +167,26 @@ Determine whether Finsweet requests the next Webflow page as HTML or calls a JSO
 ### Decision gate
 
 If the response is HTML, treat the stable paginated Webflow pages as the clean source; this is simpler and less brittle than selectors against the interactive homepage. Preserve each provider’s exact external ticket URL. Because Hollywood hosts concerts and comedy as well as film, ingest only the `film` category unless product scope explicitly expands.
+
+## Toronto
+
+Investigated 2026-09-25 from a sandbox that can reach the sites. Every Toronto venue is in `America/Toronto`.
+
+### Agile Ticketing (Revue Cinema and Fox Theatre)
+
+- Both venues sell through Agile Ticketing: the Revue on `prod3.agileticketing.net`, the Fox on its own `tickets.foxtheatre.ca` host. Agile's websales pages (`list.aspx`, `feed.ashx`) are behind Incapsula and return a block page to every server-side request, whatever the headers, so they cannot be a schedule source. The venues' own WordPress sites print the Agile links, and `extractors/agile.ts` holds the shared link handling: `evtinfo=<event id>~<guid>` carries Agile's event id.
+
+### Revue Cinema
+
+- `/calendar/` embeds every upcoming screening in the page as the FullCalendar `events` array: `{title, start, url}` with `start` in local time (`2026-12-31 18:45:00`) and `url` the film page. About 200 screenings, four months out, in one request. `/films/` lists only the first 20 films; the rest load through Bricks' `load_query_page` endpoint, which needs the site's cookie and nonce, so it is not used.
+- Film pages print the showtimes and one Agile "Buy Tickets" link per film, `info.aspx?evtinfo=<event id>~<guid>`, not one per screening. The extractor fetches a film page only for films with a screening inside the horizon and uses that link as the ticket URL. The site has no screening id, so `sourceUid` is the film slug plus the start time.
+- Fixtures: `revue-calendar.html` (the real script with seven events kept) and `revue-film.html`.
+
+### Fox Theatre
+
+- The `movies` post type is public on the WordPress REST route `/wp-json/wp/v2/movies?per_page=100&_fields=id,slug,link,title,class_list`. Each post's `class_list` names its screening days (`event-date-2026-10-17`), which bounds the film pages to fetch. About 35 posts are live at a time.
+- Each film page prints `.showtimes-lists .item` rows with `.date` ("Saturday, October 17"), `.time` ("9:00 pm") and an Agile link `ticketsearchcriteria.aspx?evtinfo=<event id>~<guid>` per screening; the event id is the `sourceUid`. A film the venue has sold out carries "SOLD OUT" in its title. A closure notice is published as a movie with midnight rows and empty links; those rows are skipped.
+- Fixtures: `fox-movies.json` (three posts from the REST route), `fox-movie.html` and `fox-movie-sold-out.html`.
 
 ## Montreal
 

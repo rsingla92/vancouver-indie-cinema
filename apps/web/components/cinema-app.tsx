@@ -59,9 +59,8 @@ export function CinemaApp({ initialShowtimes, demo, generatedAt, pickSeed }: Cin
     <main>
       <Pick film={featured} city={city} now={now} timezone={timezone} searching={query.trim().length > 0} {...(films.length > 1 ? { onPickAnother: pickAnother } : {})} />
       <Listings
-        listings={listings} screenings={visible.length} theatres={theatres} venue={activeVenue} onVenueChange={setVenue}
-        windows={windows} when={activeWindow} onWhenChange={setWhen}
-        range={windows.find((window) => window.id === activeWindow)?.label ?? ""} timezone={timezone} demo={demo}
+        listings={listings} theatres={theatres} venue={activeVenue} onVenueChange={setVenue}
+        windows={windows} when={activeWindow} onWhenChange={setWhen} timezone={timezone} demo={demo}
       />
     </main>
     <Colophon generatedAt={generatedAt} timezone={timezone} />

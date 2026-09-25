@@ -6,25 +6,20 @@ import type { TheatreRef } from "@/lib/types";
 
 interface ListingsProps {
   listings: FilmListing[];
-  screenings: number;
   theatres: TheatreRef[];
   venue: string;
   onVenueChange: (slug: string) => void;
   windows: DateWindow[];
   when: string;
   onWhenChange: (id: string) => void;
-  /** Label of the active window, shown in the heading. */
-  range: string;
   timezone: string;
   demo: boolean;
 }
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
-
 /** "Showtimes": one row per film, a small poster beside its screenings grouped by day. */
-export function Listings({ listings, screenings, theatres, venue, onVenueChange, windows, when, onWhenChange, range, timezone, demo }: ListingsProps) {
+export function Listings({ listings, theatres, venue, onVenueChange, windows, when, onWhenChange, timezone, demo }: ListingsProps) {
   return <section className="showtimes" id="showtimes">
-    <h2 className="rule-heading"><span>Showtimes</span><small>{plural(listings.length, "film")} · {plural(screenings, "screening")} · {range.toLowerCase()}</small></h2>
+    <h2 className="rule-heading"><span>Showtimes</span></h2>
     <div className="filters">
       <label className="filter cinema-select">Cinema <select value={venue} onChange={(event) => onVenueChange(event.target.value)}>
         <option value="all">All cinemas</option>

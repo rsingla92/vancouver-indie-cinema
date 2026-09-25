@@ -11,6 +11,8 @@ export const venueSlugSchema = z.enum([
   "cinema-du-musee",
   "revue-cinema",
   "fox-theatre",
+  "cinema-moderne",
+  "cinema-public",
 ]);
 
 export const extractedShowtimeSchema = z.object({

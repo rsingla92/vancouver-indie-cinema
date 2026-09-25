@@ -4,6 +4,8 @@ import { extractCinematheque } from "./cinematheque.js";
 import { extractDuMusee } from "./du-musee.js";
 import { extractDuParc } from "./du-parc.js";
 import { extractFox } from "./fox.js";
+import { extractModerne } from "./moderne.js";
+import { extractPublic } from "./public.js";
 import { extractRevue } from "./revue.js";
 import { extractHollywood } from "./hollywood.js";
 import { extractPark } from "./park.js";
@@ -23,6 +25,8 @@ export { extractDuMusee } from "./du-musee.js";
 export { agileEventId, cleanAgileUrl, isAgileTicketLink } from "./agile.js";
 export { extractRevue, parseRevueCalendar, parseRevueFilmPage, revueShowtime } from "./revue.js";
 export { extractFox, parseFoxMoviePage, parseFoxPosts } from "./fox.js";
+export { extractModerne, parseModerneCalendar, monthsInRange } from "./moderne.js";
+export { extractPublic, parsePublicSchedule } from "./public.js";
 
 export type VenueExtractor = (range: DateRange) => Promise<ExtractionBatch>;
 
@@ -38,4 +42,6 @@ export const VENUE_EXTRACTORS: Readonly<Record<VenueSlug, VenueExtractor>> = {
   "cinema-du-musee": (range) => extractDuMusee(range),
   "revue-cinema": (range) => extractRevue(range),
   "fox-theatre": (range) => extractFox(range),
+  "cinema-moderne": (range) => extractModerne(range),
+  "cinema-public": () => extractPublic(),
 };

@@ -30,6 +30,8 @@ Reject analytics, ad, newsletter, CAPTCHA, and payment calls. A schedule source 
 | VIFF Centre | WordPress listings + Elevent embedded booking widget | Server-rendered What's On pages; Elevent only for availability/detail gaps | High |
 | Hollywood Theatre | Webflow CMS + Finsweet CMS pagination | Webflow listing HTML and pagination URLs | High |
 | Cinéma du Parc, Cinéma Beaubien, Cinéma du Musée | One SvelteKit site, cinemacinema.ca | `/en/schedule/__data.json?date=YYYY-MM-DD` (JSON, one day per request) | High |
+| Cinéma Moderne | WordPress calendar + TicketAcces | `/horaire/YYYY/MM/` (HTML, one month per request) | High |
+| Cinéma Public | WordPress calendar + TicketAcces | `/horaire/` (HTML, the whole published fortnight) | High |
 | Revue Cinema | WordPress (Bricks) + Agile Ticketing | FullCalendar events array on `/calendar/`; Agile link from each film page | High |
 | Fox Theatre | WordPress (Elementor) + Agile Ticketing | `/wp-json/wp/v2/movies` for the films, each film page for times and Agile links | High |
 
@@ -200,6 +202,16 @@ Investigated 2026-09-25 from a sandbox that can reach the sites, so these are ca
 - Ticket links are `https://billetterie.<cinema>.com/US/movie-purchase.awp?P1=01&P2=<cinema_id, two digits>&P3=<representation_id>`, exactly as the page prints them; the billetterie page confirms date, time and room. When `url_bel` is false the screening is sold elsewhere and `url_autre_bel` holds that link (festival screenings).
 - The crawl is one request for today plus one per further day inside the horizon (about 60 for the default 60 days, roughly 370 KB each). The three venues run concurrently in one ingest and share a single crawl.
 - There is an `original_title` field on the film page's data (`/en/films/<slug>/__data.json`), but it was empty on the pages inspected and would cost one request per film, so it is not fetched.
+
+### Cinéma Moderne
+
+- `/horaire/` is a monthly calendar; `/horaire/YYYY/MM/` selects a month and a month page also shows the days of adjacent weeks, so month pages overlap. Each `.cm-Cal__day[data-day]` holds `.cm-Cal__day__event` cards with the time (`.cm-Fat`), the title and version label (`.cm-Card__title`, `.cm-Card__subtitles`: `(VOSTA)`, `(VOF + Q&A)`…), a details list (director, country, year, running time, languages, format such as `DCP - Restauration 4K`) and a TicketAcces link `representations/index.cfm?EvenementID=<film>`.
+- Tickets are sold per film on TicketAcces (the screening is chosen there), so the ticket link carries the film's event id, not a screening id; `sourceUid` is the film slug plus the start time. The year in the details becomes `releaseYear`. Fixture: `moderne-horaire.html` (three days of the October page).
+
+### Cinéma Public
+
+- `/horaire/` lists the whole published schedule, about two weeks, in the same calendar theme as Cinéma Moderne (`.cm-Cal__day[data-day]`, `.cm-Cal__day__event`). Each card prints the time, the title, a version label (`(STF)`, `(STA)`), notes in `.text-warning` (`Complet`, `En présence de …`, `Entrée libre`, `Gratuit (sur réservation)`, `Dernière chance`) and a "Billetterie" link, usually TicketAcces `achat/index.cfm?RepresentationID=<screening>`; free screenings link to the venue's own page or Eventbrite instead.
+- The page also carries a JSON-LD `ItemList` of `ScreeningEvent`s with the same screenings, but it marks every screening `InStock`, including ones the page prints as `Complet`, so the HTML cards are the source. `RepresentationID` is the `sourceUid`; a screening without one uses the film slug and start time. Fixture: `public-horaire.html` (three days).
 
 ## Payload acceptance checklist
 

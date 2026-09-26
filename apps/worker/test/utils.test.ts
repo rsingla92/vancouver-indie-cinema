@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
-import { addPrintedYears, inferYear, parseDateTime, printedYear } from "../src/extractors/utils.js";
+import { addPageDetails, inferYear, parseDateTime, printedYear, readPageDetails } from "../src/extractors/utils.js";
 
 const reference = (iso: string) => DateTime.fromISO(iso, { zone: "America/Vancouver" });
 
@@ -70,19 +70,37 @@ describe("printedYear", () => {
     expect(printedYear("Coming 2031, 120 min", 2027)).toBeNull();
   });
 
-  it("fills in years from each film's page once, silently skipping pages it cannot read", async () => {
-    const showtime = (id: string, detailUrl: string, releaseYear?: number) => ({
-      venueSlug: "rio-theatre" as const, sourceUid: id, rawTitle: "Film", startsAt: "2026-09-26T19:00:00-07:00", detailUrl, status: "scheduled" as const, tags: [], sourcePayload: {},
-      ...(releaseYear ? { releaseYear } : {}),
+  it("fills in years, images and blurbs from each film's page once, silently skipping pages it cannot read", async () => {
+    const showtime = (id: string, detailUrl: string, extra: { releaseYear?: number; imageUrl?: string; synopsis?: string } = {}) => ({
+      venueSlug: "rio-theatre" as const, sourceUid: id, rawTitle: "Film", startsAt: "2026-09-26T19:00:00-07:00", detailUrl, status: "scheduled" as const, tags: [], sourcePayload: {}, ...extra,
     });
-    const showtimes = [showtime("1", "https://x/a"), showtime("2", "https://x/a"), showtime("3", "https://x/b", 1999), showtime("4", "https://x/c")];
+    const showtimes = [showtime("1", "https://x/a"), showtime("2", "https://x/a"), showtime("3", "https://x/b", { releaseYear: 1999, imageUrl: "https://x/own.jpg", synopsis: "The venue's own words." }), showtime("4", "https://x/c")];
     const fetched: string[] = [];
-    await addPrintedYears(showtimes, async (url) => {
+    await addPageDetails(showtimes, async (url) => {
       fetched.push(url.pathname);
       if (url.pathname === "/c") throw new Error("boom");
-      return "<html><body><p>Japan 1962. Dir: Masaki Kobayashi.</p></body></html>";
+      return `<html><head><meta property="og:image" content="/stills/harakiri.jpg"><meta property="og:description" content="A ronin asks to commit seppuku in a feudal lord's courtyard."></head><body><p>Japan 1962. Dir: Masaki Kobayashi.</p></body></html>`;
     }, { maxYear: 2027 });
     expect(fetched.sort()).toEqual(["/a", "/c"]);
     expect(showtimes.map((item) => item.releaseYear)).toEqual([1962, 1962, 1999, undefined]);
+    expect(showtimes.map((item) => item.imageUrl)).toEqual(["https://x/stills/harakiri.jpg", "https://x/stills/harakiri.jpg", "https://x/own.jpg", undefined]);
+    expect(showtimes.map((item) => item.synopsis)).toEqual(["A ronin asks to commit seppuku in a feudal lord's courtyard.", "A ronin asks to commit seppuku in a feudal lord's courtyard.", "The venue's own words.", undefined]);
+  });
+});
+
+describe("readPageDetails", () => {
+  it("takes the share image and description, falling back to the longest paragraph", () => {
+    const page = `<head><meta name="twitter:image" content="https://cdn.example/still.png"><meta name="description" content="Tickets"></head><body><p>Short.</p><p>${"A long synopsis paragraph that says what the film is about. ".repeat(3).trim()}</p><p>Canada, 2026, 94 min</p></body>`;
+    expect(readPageDetails(page, "https://x/film", 2027)).toEqual({ year: 2026, imageUrl: "https://cdn.example/still.png", synopsis: "A long synopsis paragraph that says what the film is about. ".repeat(3).trim() });
+  });
+
+  it("ignores images that are not web addresses and pages that say nothing", () => {
+    expect(readPageDetails(`<head><meta property="og:image" content="data:image/png;base64,AAAA"></head><body><p>Doors 7pm</p></body>`, "https://x/film", 2027)).toEqual({ year: null });
+    expect(readPageDetails(`<head><meta property="og:image" content="//cdn.example/still.jpg"></head><body></body>`, "https://x/film", 2027)).toEqual({ year: null, imageUrl: "https://cdn.example/still.jpg" });
+  });
+
+  it("caps a blurb at a thousand characters", () => {
+    const wall = "word ".repeat(400).trim();
+    expect(readPageDetails(`<body><p>${wall}</p></body>`, "https://x/film", 2027).synopsis).toHaveLength(1000);
   });
 });

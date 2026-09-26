@@ -33,6 +33,7 @@ suite("CinemaRepository against Postgres", () => {
     await sql`delete from showtimes where source_uid like 'int-%'`;
     await sql`delete from raw_source_items where source_uid like 'int-%'`;
     await sql`delete from movies where tmdb_id = ${TMDB_ID}`;
+    await sql`delete from lookup_cache where provider = 'int-test'`;
   };
   const tagsFor = async (sourceUid: string) => (await sql<{ slug: string }[]>`
     select t.slug from showtime_tags st join tags t on t.id = st.tag_id join showtimes s on s.id = st.showtime_id
@@ -124,6 +125,44 @@ suite("CinemaRepository against Postgres", () => {
     });
     expect(skipped).toEqual({ status: "review", showtimeId: null });
     expect((await sql`select 1 from showtimes where source_uid = 'int-3'`).length).toBe(0);
+  });
+
+  it("keeps the venue's image and blurb, or a second database's, for a film no database matched", async () => {
+    const orchard = (overrides: Partial<NormalizedTitle> = {}): NormalizedTitle => ({ coreTitle: "Orchard", releaseYear: 2026, contentKind: "film", tags: [], confidence: 0.96, note: "", ...overrides });
+    const listing = async () => (await sql<{ listing_image_url: string | null; listing_synopsis: string | null; listing_year: number | null }[]>`
+      select listing_image_url, listing_synopsis, listing_year from showtimes where source_uid = 'int-5'`)[0];
+
+    const listed = await repository.merge({
+      item: item({ sourceUid: "int-5", rawTitle: "Orchard", imageUrl: "https://viff.org/media/orchard.jpg", synopsis: "Three siblings return to the family orchard." }),
+      normalized: orchard(), candidate: null, refusal: "refused: TMDB returned no candidates; OMDb has \"Orchard\" (2026, tt1)",
+      details: { imageUrl: "https://m.media-amazon.com/images/orchard.jpg", synopsis: "A database's plot." },
+      payloadHash: "h6", rulesVersion: "t",
+    });
+    expect(listed.status).toBe("review");
+    // A poster beats a still from the venue; the venue's own words beat a database plot.
+    expect(await listing()).toEqual({ listing_image_url: "https://m.media-amazon.com/images/orchard.jpg", listing_synopsis: "Three siblings return to the family orchard.", listing_year: 2026 });
+
+    // A later run that learns nothing keeps what an earlier one found.
+    await repository.merge({ item: item({ sourceUid: "int-5", rawTitle: "Orchard" }), normalized: orchard({ releaseYear: null }), candidate: null, payloadHash: "h7", rulesVersion: "t" });
+    expect(await listing()).toEqual({ listing_image_url: "https://m.media-amazon.com/images/orchard.jpg", listing_synopsis: "Three siblings return to the family orchard.", listing_year: 2026 });
+
+    await repository.merge({ item: item({ sourceUid: "int-6", rawTitle: "Orchard" }), normalized: orchard({ releaseYear: null }), candidate: null, payloadHash: "h8", rulesVersion: "t" });
+    expect((await sql<{ listing_image_url: string | null; listing_year: number | null }[]>`select listing_image_url, listing_year from showtimes where source_uid = 'int-6'`)[0]).toEqual({ listing_image_url: null, listing_year: null });
+  });
+
+  it("keeps lookup answers, empty ones included, until they age out", async () => {
+    expect(await repository.get("int-test", "k", 60_000)).toBeUndefined();
+    await repository.set("int-test", "k", { imdbId: "tt1", title: "K", year: null });
+    await repository.set("int-test", "none", null);
+    expect(await repository.get("int-test", "k", 60_000)).toEqual({ imdbId: "tt1", title: "K", year: null });
+    expect(await repository.get("int-test", "none", 60_000)).toBeNull();
+
+    await repository.set("int-test", "k", { imdbId: "tt2", title: "K", year: 2001 });
+    expect(await repository.get("int-test", "k", 60_000)).toEqual({ imdbId: "tt2", title: "K", year: 2001 });
+
+    await sql`update lookup_cache set fetched_at = now() - interval '2 minutes' where provider = 'int-test'`;
+    expect(await repository.get("int-test", "k", 60_000)).toBeUndefined();
+    expect(await repository.get("int-test", "k", 600_000)).toEqual({ imdbId: "tt2", title: "K", year: 2001 });
   });
 
   it("reads a venue's programme and its pinned titles", async () => {

@@ -73,6 +73,8 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
 
   const rawTitle = cleanText($("h1.heading-events").first().text() || $("title").text().split(" at Hollywood")[0]);
   const description = $("meta[name='description']").attr("content") ?? "";
+  const shareImage = $("meta[property='og:image']").attr("content");
+  const imageUrl = shareImage && /^https?:\/\//.test(shareImage) ? shareImage : undefined;
   // Join text nodes with spaces so adjacent elements never fuse into one word.
   const bodyText = cleanText($("body *").contents().filter((_, node) => node.type === "text").map((_, node) => $(node).text()).get().join(" "));
   if (!rawTitle) return { showtimes: [], warning: `${pageUrl}: film page has no title` };
@@ -105,6 +107,8 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
       rawTitle,
       startsAt: iso(startsAt),
       ...(releaseYear ? { releaseYear } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(description.length >= 40 ? { synopsis: description.slice(0, 1000) } : {}),
       detailUrl: pageUrl,
       ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
       tags: categories.filter((category) => category !== "film"),

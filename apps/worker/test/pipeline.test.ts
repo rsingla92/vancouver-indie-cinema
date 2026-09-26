@@ -84,6 +84,42 @@ describe("processShowtime", () => {
     expect(none.merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, normalized: expect.objectContaining({ coreTitle: "Klassic Kidz: ParaNorman" }) }));
   });
 
+  it("asks OMDb only when TMDB has nothing close, and hands what it finds to the listing", async () => {
+    const found = { imdbId: "tt1", title: "Tony", year: 2009, posterUrl: "https://m.media-amazon.com/images/tony.jpg", plot: "A loner drifts through London." };
+    const none = dependencies(normalized(), []);
+    const lookup = vi.fn(async () => found);
+    await processShowtime(item, { ...none.deps, omdb: { enabled: true, lookup } });
+    expect(lookup).toHaveBeenCalledWith(expect.objectContaining({ coreTitle: "Tony" }));
+    expect(none.merge).toHaveBeenCalledWith(expect.objectContaining({
+      candidate: null,
+      details: { imageUrl: "https://m.media-amazon.com/images/tony.jpg", synopsis: "A loner drifts through London." },
+      refusal: 'refused: TMDB returned no candidates; OMDb has "Tony" (2009, tt1)',
+    }));
+
+    const empty = dependencies(normalized(), []);
+    await processShowtime(item, { ...empty.deps, omdb: { enabled: true, lookup: vi.fn(async () => null) } });
+    expect(empty.merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, refusal: "refused: TMDB returned no candidates; OMDb has nothing" }));
+    expect(empty.merge.mock.calls[0]?.[0]).not.toHaveProperty("details");
+
+    // Two films share the title: TMDB knows the film, it just cannot choose, so OMDb is not asked.
+    const twin: TmdbMovie = { ...tmdbMovie, id: 8, release_date: "2013-01-01" };
+    const ambiguous = dependencies(normalized(), [tmdbMovie, twin]);
+    const unasked = vi.fn(async () => found);
+    await processShowtime(item, { ...ambiguous.deps, omdb: { enabled: true, lookup: unasked } });
+    expect(ambiguous.merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, refusal: expect.stringMatching(/^refused: best .* are within/) }));
+    expect(unasked).not.toHaveBeenCalled();
+
+    // Neither for a match, a non-film, nor without a key.
+    const matched = dependencies(normalized({ releaseYear: 2009 }), [tmdbMovie]);
+    await processShowtime(item, { ...matched.deps, omdb: { enabled: true, lookup: unasked } });
+    const skipped = dependencies(normalized({ contentKind: "non_film" }), []);
+    await processShowtime(item, { ...skipped.deps, omdb: { enabled: true, lookup: unasked } });
+    const disabled = dependencies(normalized(), []);
+    await processShowtime(item, { ...disabled.deps, omdb: { enabled: false, lookup: unasked } });
+    expect(unasked).not.toHaveBeenCalled();
+    expect(disabled.merge).toHaveBeenCalledWith(expect.objectContaining({ refusal: "refused: TMDB returned no candidates" }));
+  });
+
   it("skips TMDB for non-film and low-confidence titles", async () => {
     for (const result of [normalized({ contentKind: "non_film" }), normalized({ confidence: 0.45 })]) {
       const { deps, search, merge } = dependencies(result, [tmdbMovie]);

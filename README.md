@@ -45,6 +45,8 @@ A screening is linked to a TMDB film only when one candidate clearly wins; other
 - The venue's programme, set in `theatres.source_config` as `{"programme": "first_run"}` or `"festival"`: there, of two same-title films, the current release wins. Repertory and mixed venues get no preference.
 - A pin in `title_overrides` for a title no rule will settle: `insert into title_overrides (theatre_slug, title, tmdb_id, note) values ('cinema-du-parc', 'Suspiria', 11906, '1977, Argento');`. Write the title as the venue prints it; `'*'` as the venue applies everywhere. The TMDB id is the number in the film's themoviedb.org URL.
 
+When no database knows a film, the screening still shows the venue's own image and blurb, which the extractors take from the film's page. With an `OMDB_API_KEY` secret (free at omdbapi.com; a thousand lookups a day, answers cached for a week), OMDb is asked for a poster and a plot before falling back to the venue's, since festival films reach IMDb first.
+
 The review queue that shows what to pin: `select venue, normalized_title, match_reason from raw_source_items ...` (see `docs/architecture.md`).
 
 ## Cities

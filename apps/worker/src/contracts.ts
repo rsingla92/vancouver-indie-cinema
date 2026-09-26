@@ -30,6 +30,9 @@ export const extractedShowtimeSchema = z.object({
   ticketUrl: z.string().url().optional(),
   /** Release year when the venue prints one; it settles namesakes and remakes. */
   releaseYear: z.number().int().min(1888).max(2200).optional(),
+  /** The venue's own image and blurb, shown when no database knows the film. */
+  imageUrl: z.string().url().optional(),
+  synopsis: z.string().max(2000).optional(),
   status: z.enum(["scheduled", "sold_out", "cancelled"]).default("scheduled"),
   tags: z.array(z.string()).default([]),
   sourcePayload: z.record(z.string(), z.unknown()),

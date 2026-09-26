@@ -126,33 +126,63 @@ export function printedYear(text: string, maxYear: number): number | null {
   return null;
 }
 
-export interface PrintedYearOptions {
+export interface PageDetails {
+  year: number | null;
+  imageUrl?: string;
+  synopsis?: string;
+}
+
+const SYNOPSIS_MAX = 1000;
+
+/**
+ * What a film's own page says about it: the year it prints, its share image, and
+ * a blurb (the page's description, or its longest paragraph).
+ */
+export function readPageDetails(html: string, pageUrl: string, maxYear: number): PageDetails {
+  const $ = load(html);
+  const year = printedYear(cleanText($("body").text()), maxYear);
+  const image = $('meta[property="og:image"]').attr("content") ?? $('meta[name="twitter:image"]').attr("content");
+  const description = cleanText($('meta[property="og:description"]').attr("content") ?? $('meta[name="description"]').attr("content"));
+  const paragraph = $("p").map((_, element) => cleanText($(element).text())).get().filter((text) => text.length >= 80).sort((a, b) => b.length - a.length)[0];
+  const synopsis = (description.length >= 40 ? description : paragraph ?? "").slice(0, SYNOPSIS_MAX);
+  return {
+    year,
+    ...(image && /^(?:https?:\/\/|\/)/.test(image) ? { imageUrl: absoluteUrl(image, pageUrl) } : {}),
+    ...(synopsis ? { synopsis } : {}),
+  };
+}
+
+export interface PageDetailsOptions {
   concurrency?: number;
   maxYear?: number;
 }
 
 /**
- * Fetch each film's own page once and take the year it prints, for showtimes that
- * have none. A page that cannot be read or names no year costs nothing but a
- * possible match, so failures are silent.
+ * Fetch each film's own page once and fill in what the listing lacked: the year it
+ * prints, its image and a blurb. A page that cannot be read costs nothing but a
+ * possible match and a poster, so failures are silent.
  */
-export async function addPrintedYears(
+export async function addPageDetails(
   showtimes: ExtractedShowtime[],
   fetchPage: (url: URL) => Promise<string>,
-  options: PrintedYearOptions = {},
+  options: PageDetailsOptions = {},
 ): Promise<void> {
   const maxYear = options.maxYear ?? new Date().getFullYear() + 1;
-  const pages = [...new Set(showtimes.filter((showtime) => !showtime.releaseYear).map((showtime) => showtime.detailUrl))];
-  const years = new Map<string, number | null>();
+  const pages = [...new Set(showtimes.filter((showtime) => !showtime.releaseYear || !showtime.imageUrl || !showtime.synopsis).map((showtime) => showtime.detailUrl))];
+  const details = new Map<string, PageDetails>();
   await mapWithConcurrency(pages, options.concurrency ?? 2, async (url) => {
     try {
-      years.set(url, printedYear(cleanText(load(await fetchPage(new URL(url)))("body").text()), maxYear));
+      details.set(url, readPageDetails(await fetchPage(new URL(url)), url, maxYear));
     } catch {
-      years.set(url, null);
+      // Left without details.
     }
   });
   for (const showtime of showtimes) {
-    const year = years.get(showtime.detailUrl);
-    if (!showtime.releaseYear && year) showtime.releaseYear = year;
+    const found = details.get(showtime.detailUrl);
+    if (!found) continue;
+    if (!showtime.releaseYear && found.year) showtime.releaseYear = found.year;
+    if (!showtime.imageUrl && found.imageUrl) showtime.imageUrl = found.imageUrl;
+    if (!showtime.synopsis && found.synopsis) showtime.synopsis = found.synopsis;
   }
 }
+

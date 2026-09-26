@@ -9,6 +9,8 @@ export interface MergeInput {
   candidate: RankedCandidate | null;
   /** Why there is no candidate, for the review queue. */
   refusal?: string;
+  /** What a second database said about an unmatched film. */
+  details?: { imageUrl?: string; synopsis?: string };
   payloadHash: string;
   rulesVersion: string;
   ingestionRunId?: string;
@@ -125,16 +127,26 @@ async function upsertMovie(sql: Tx, movie: TmdbMovie, fallbackYear: number | nul
  * Insert or refresh the screening. A film linked on an earlier run is kept when this
  * run could not match, so a flaky TMDB search never strips a listing of its poster.
  */
-async function upsertShowtime(sql: Tx, ids: { theatreId: string; movieId: string | null; rawId: string }, item: ExtractedShowtime, displayTitle: string, ticketUrl: string): Promise<string> {
+interface ListingDetails {
+  imageUrl: string | null;
+  synopsis: string | null;
+  year: number | null;
+}
+
+async function upsertShowtime(sql: Tx, ids: { theatreId: string; movieId: string | null; rawId: string }, item: ExtractedShowtime, displayTitle: string, ticketUrl: string, listing: ListingDetails): Promise<string> {
   const rows = await sql<{ id: string }[]>`
     insert into showtimes (theatre_id, movie_id, raw_source_item_id, source_uid, display_title, starts_at, ends_at,
-      ticket_url, status, last_seen_at)
+      ticket_url, status, listing_image_url, listing_synopsis, listing_year, last_seen_at)
     values (${ids.theatreId}, ${ids.movieId}, ${ids.rawId}, ${item.sourceUid}, ${displayTitle},
-      ${item.startsAt}, ${item.endsAt ?? null}, ${ticketUrl}, ${item.status}, now())
+      ${item.startsAt}, ${item.endsAt ?? null}, ${ticketUrl}, ${item.status}, ${listing.imageUrl}, ${listing.synopsis}, ${listing.year}, now())
     on conflict (theatre_id, source_uid) do update set movie_id = coalesce(excluded.movie_id, showtimes.movie_id),
       raw_source_item_id = excluded.raw_source_item_id, display_title = excluded.display_title,
       starts_at = excluded.starts_at, ends_at = excluded.ends_at, ticket_url = excluded.ticket_url,
-      status = excluded.status, is_active = true, last_seen_at = now()
+      status = excluded.status,
+      listing_image_url = coalesce(excluded.listing_image_url, showtimes.listing_image_url),
+      listing_synopsis = coalesce(excluded.listing_synopsis, showtimes.listing_synopsis),
+      listing_year = coalesce(excluded.listing_year, showtimes.listing_year),
+      is_active = true, last_seen_at = now()
     returning id`;
   return rows[0]!.id;
 }
@@ -247,10 +259,28 @@ export class CinemaRepository {
       if (!input.candidate && input.normalized.contentKind === "non_film") return { status: "review", showtimeId: null };
 
       const movieId = input.candidate ? await upsertMovie(sql, input.candidate.movie, input.normalized.releaseYear) : null;
-      const showtimeId = await upsertShowtime(sql, { theatreId, movieId, rawId }, input.item, input.normalized.coreTitle, ticketUrl);
+      // A real poster beats the venue's still; the venue's own blurb beats a database plot.
+      const listing: ListingDetails = {
+        imageUrl: input.details?.imageUrl ?? input.item.imageUrl ?? null,
+        synopsis: input.item.synopsis ?? input.details?.synopsis ?? null,
+        year: input.normalized.releaseYear,
+      };
+      const showtimeId = await upsertShowtime(sql, { theatreId, movieId, rawId }, input.item, input.normalized.coreTitle, ticketUrl, listing);
       await syncTags(sql, showtimeId, [...input.item.tags, ...input.normalized.tags]);
       return movieId ? { status: "matched", movieId, showtimeId } : { status: "review", showtimeId };
     });
+  }
+
+  /** Cached answer from a rate-limited lookup, or undefined when none is fresh enough. */
+  async get(provider: string, key: string, maxAgeMs: number): Promise<unknown | undefined> {
+    const rows = await this.sql<{ response: unknown }[]>`
+      select response from lookup_cache where provider = ${provider} and key = ${key} and fetched_at > now() - make_interval(secs => ${maxAgeMs / 1000})`;
+    return rows.length > 0 ? rows[0]!.response : undefined;
+  }
+
+  async set(provider: string, key: string, value: unknown): Promise<void> {
+    await this.sql`insert into lookup_cache (provider, key, response, fetched_at) values (${provider}, ${key}, ${this.sql.json(value as postgres.JSONValue)}, now())
+      on conflict (provider, key) do update set response = excluded.response, fetched_at = now()`;
   }
 
   async close(): Promise<void> {

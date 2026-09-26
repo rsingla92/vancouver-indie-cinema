@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DateRange, ExtractionBatch, ExtractedShowtime, VenueSlug } from "../contracts.js";
 import { extractedShowtimeSchema } from "../contracts.js";
 import { fetchJson, fetchText } from "../http.js";
-import { iso, mapWithConcurrency, TORONTO_TZ, addPrintedYears } from "./utils.js";
+import { iso, mapWithConcurrency, TORONTO_TZ, addPageDetails } from "./utils.js";
 
 /**
  * Cinéma Beaubien, Cinéma du Parc and Cinéma du Musée publish one schedule on
@@ -292,6 +292,6 @@ export interface CinemaCinemaOptions {
 export async function extractCinemaCinema(venue: CinemaCinemaVenue, range: DateRange, options: CinemaCinemaOptions = {}): Promise<ExtractionBatch> {
   const crawl = await sharedCrawlFor(range, options.crawl ?? crawlCinemaCinema);
   const showtimes = crawl.showtimes.filter((showtime) => showtime.venueSlug === venue.venueSlug).map((showtime) => ({ ...showtime }));
-  await addPrintedYears(showtimes, options.fetchPage ?? fetchText);
+  await addPageDetails(showtimes, options.fetchPage ?? fetchText);
   return { venueSlug: venue.venueSlug, fetchedAt: crawl.fetchedAt, showtimes, warnings: [...crawl.warnings] };
 }

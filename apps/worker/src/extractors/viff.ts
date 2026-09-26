@@ -19,6 +19,10 @@ export function parseViffPage(html: string, pageUrl = `${BASE}/whats-on/`, refer
     const now = reference ?? DateTime.now().setZone(VANCOUVER_TZ);
     // Everything on the card but the title: country, year and running time live there.
     const releaseYear = printedYear(cleanText(card.clone().find(".c-event-card__title").remove().end().text()), now.year + 1);
+    const image = card.find("img").first();
+    const imageSrc = image.attr("data-src") ?? image.attr("src");
+    const imageUrl = imageSrc && /^(?:https?:)?\/\/|^\//.test(imageSrc) ? absoluteUrl(imageSrc, pageUrl) : undefined;
+    const synopsis = card.find("p").map((__, element) => cleanText($(element).text())).get().filter((text) => text.length >= 60).sort((a, b) => b.length - a.length)[0];
 
     card.find(".c-event-instance").each((__, instanceElement) => {
       const instance = $(instanceElement);
@@ -42,6 +46,8 @@ export function parseViffPage(html: string, pageUrl = `${BASE}/whats-on/`, refer
         rawTitle,
         startsAt: iso(startsAt),
         ...(releaseYear ? { releaseYear } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(synopsis ? { synopsis: synopsis.slice(0, 1000) } : {}),
         detailUrl,
         ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
         status,

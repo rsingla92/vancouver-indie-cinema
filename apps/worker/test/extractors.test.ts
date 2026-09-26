@@ -119,9 +119,27 @@ describe("VIFF", () => {
     const html = card("Sat Sep 26", "6:10 pm").replace("Book now", "Standby only");
     expect(parseViffPage(html, "https://viff.org/whats-on/", DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" }))[0]?.status).toBe("sold_out");
   });
+
+  it("keeps the card's still and blurb, for films no database knows", () => {
+    const blurb = "A first feature that follows three siblings back to the family orchard over one dry summer.";
+    const html = card("Sat Sep 26", "6:10 pm").replace('<div class="c-event-instance">', `<img data-src="/media/example.jpg" src="data:image/gif;base64,R0lGOD"><p class="c-event-card__excerpt">${blurb}</p><p>Canada</p><div class="c-event-instance">`);
+    const [showtime] = parseViffPage(html, "https://viff.org/whats-on/", DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" }));
+    expect(showtime).toMatchObject({ imageUrl: "https://viff.org/media/example.jpg", synopsis: blurb });
+    expect(parseViffPage(card("Sat Sep 26", "6:10 pm"), "https://viff.org/whats-on/", DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" }))[0]).not.toHaveProperty("imageUrl");
+  });
 });
 
 describe("Hollywood Theatre", () => {
+  it("keeps the page's share image and description, for films no database knows", () => {
+    const blurb = "A documentary about the last projectionist in a small town, screening once with the director present.";
+    const html = `<meta name="description" content="${blurb}"><meta property="og:image" content="https://www.hollywoodtheatre.ca/images/projectionist.jpg"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><div>October 3, 2026</div><p>SHOW: 7:00pm</p>`;
+    expect(parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/x").showtimes[0]).toMatchObject({ imageUrl: "https://www.hollywoodtheatre.ca/images/projectionist.jpg", synopsis: blurb });
+    const bare = `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><div>October 3, 2026</div><p>SHOW: 7:00pm</p>`;
+    const [showtime] = parseHollywoodEventPage(bare, "https://www.hollywoodtheatre.ca/events/x").showtimes;
+    expect(showtime).not.toHaveProperty("imageUrl");
+    expect(showtime).not.toHaveProperty("synopsis");
+  });
+
   it("keeps film events and creates one record per advertised show time", () => {
     const html = `<title>Example Film at Hollywood Theatre</title><meta name="description" content="Example Film September 30, 2026 at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a><p>DOORS: 6:00pm // SHOW: 7:00pm</p><a href="https://tickets.example.com/example">Get Tickets</a>`;
     const { showtimes, warning } = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/example-film");

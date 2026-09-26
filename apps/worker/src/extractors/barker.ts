@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DateRange, ExtractionBatch, ExtractedShowtime, VenueSlug } from "../contracts.js";
 import { extractedShowtimeSchema } from "../contracts.js";
 import { fetchJson, fetchText } from "../http.js";
-import { addPrintedYears, VANCOUVER_TZ } from "./utils.js";
+import { addPageDetails, VANCOUVER_TZ } from "./utils.js";
 
 /**
  * Venues whose WordPress sites publish their schedule through the Barker events
@@ -129,6 +129,6 @@ export async function extractBarker(venue: BarkerVenue, range: DateRange, option
     if (page === maxPages) warnings.push(`stopped at page cap (${maxPages}); listings may be incomplete`);
   }
 
-  await addPrintedYears(showtimes, options.fetchPage ?? fetchText);
+  await addPageDetails(showtimes, options.fetchPage ?? fetchText);
   return { venueSlug: venue.venueSlug, fetchedAt: new Date().toISOString(), showtimes, warnings };
 }

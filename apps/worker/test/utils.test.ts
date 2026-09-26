@@ -63,6 +63,10 @@ describe("printedYear", () => {
     expect(printedYear("USA | 1990 | 113 min | Directed by Paul Verhoeven", 2027)).toBe(1990);
     expect(printedYear("2001: A Space Odyssey — USA, 1968, 149 min", 2027)).toBe(1968);
     expect(printedYear("VIFF 2026 · Sat Sep 26 · 6:10 pm", 2027)).toBeNull();
+    expect(printedYear("Friday, October 3, 2026 · Doors 6:30 · 113 min", 2027)).toBeNull();
+    expect(printedYear("Sat Oct 3rd, 2026 | 90 min", 2027)).toBeNull();
+    expect(printedYear("3 octobre 2026, 95 min", 2027)).toBeNull();
+    expect(printedYear("Friday, October 3, 2026 · 113 min · USA, 1990, 113 min", 2027)).toBe(1990);
     expect(printedYear("Coming 2031, 120 min", 2027)).toBeNull();
   });
 

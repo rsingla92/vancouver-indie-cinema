@@ -104,17 +104,24 @@ export async function mapWithConcurrency<T, R>(
 /** "Japan 1962. Dir: Masaki Kobayashi.": the year closest before a director credit. */
 const YEAR_BEFORE_DIRECTOR = /\b((?:18|19|20)\d{2})\b(?:(?!\b(?:18|19|20)\d{2}\b)[\s\S]){0,60}?\bdir(?:\.|:|ector|ected|\.:)/i;
 /** "Canada, 2026, 94 min", "USA | 1990 | 113 min": a year followed by a running time, with no other number between. */
-const YEAR_BEFORE_RUNTIME = /\b((?:18|19|20)\d{2})\b[^\d]{0,40}?\b\d{1,3}\s*(?:min(?:ute)?s?|mins?)(?![a-z])/i;
+const YEAR_BEFORE_RUNTIME = /\b((?:18|19|20)\d{2})\b[^\d]{0,40}?\b\d{1,3}\s*(?:min(?:ute)?s?|mins?)(?![a-z])/gi;
+/** "October 3, 2026", "3 October 2026", "Fri Oct 3 2026": the year is part of a screening date, not a release year. */
+const DATE_BEFORE_YEAR = /(?:\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?\s+\d{1,2}(?:st|nd|rd|th)?,?\s*|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?\s*|\b\d{1,2}[./-]\d{1,2}[./-])$/i;
 
 /**
  * The release year a venue prints beside a film, or null. Only a year anchored to a
  * director credit or a running time counts, so a season label such as "VIFF 2026"
- * or a title such as "2001: A Space Odyssey" is never mistaken for one.
+ * or a title such as "2001: A Space Odyssey" is never mistaken for one, and a year
+ * that is part of a screening date ("October 3, 2026 · 113 min") is skipped.
  */
 export function printedYear(text: string, maxYear: number): number | null {
-  for (const pattern of [YEAR_BEFORE_DIRECTOR, YEAR_BEFORE_RUNTIME]) {
-    const year = Number(text.match(pattern)?.[1] ?? NaN);
-    if (year >= 1888 && year <= maxYear) return year;
+  const credited = Number(text.match(YEAR_BEFORE_DIRECTOR)?.[1] ?? NaN);
+  if (credited >= 1888 && credited <= maxYear) return credited;
+  for (const match of text.matchAll(YEAR_BEFORE_RUNTIME)) {
+    const year = Number(match[1]);
+    if (year < 1888 || year > maxYear) continue;
+    if (DATE_BEFORE_YEAR.test(text.slice(Math.max(0, match.index - 24), match.index))) continue;
+    return year;
   }
   return null;
 }

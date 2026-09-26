@@ -2,7 +2,7 @@ import { load } from "cheerio";
 import { DateTime } from "luxon";
 import { extractedShowtimeSchema, type ExtractionBatch, type ExtractedShowtime } from "../contracts.js";
 import { fetchText } from "../http.js";
-import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime, VANCOUVER_TZ } from "./utils.js";
+import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime, printedYear, VANCOUVER_TZ } from "./utils.js";
 
 const BASE = "https://thecinematheque.ca";
 
@@ -12,14 +12,8 @@ const BASE = "https://thecinematheque.ca";
  * settles the December-to-January boundary; the programme year in the page URL
  * is deliberately not used because a page can list screenings in the next year.
  */
-/** "Japan 1962. Dir: Masaki Kobayashi. 133 min." The year closest before the director credit. */
-const YEAR_BEFORE_DIRECTOR = /\b((?:18|19|20)\d{2})\b(?:(?!\b(?:18|19|20)\d{2}\b)[\s\S]){0,60}?\bdir(?:\.|:|ector)/i;
-
-export function parseFilmYear(text: string, maxYear: number): number | null {
-  const match = text.match(YEAR_BEFORE_DIRECTOR);
-  const year = match ? Number(match[1]) : NaN;
-  return year >= 1888 && year <= maxYear ? year : null;
-}
+/** The year the film page prints; kept under its old name for the tests and the index. */
+export const parseFilmYear = printedYear;
 
 export function parseCinemathequeFilmPage(html: string, pageUrl: string, reference?: DateTime): ExtractedShowtime[] {
   const $ = load(html);

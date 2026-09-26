@@ -107,6 +107,14 @@ describe("VIFF", () => {
     expect(showtime?.startsAt).toBe("2027-01-02T19:00:00-08:00");
   });
 
+  it("reads the year the card prints beside the running time, never the season label", () => {
+    const withMeta = card("Sat Sep 26", "6:10 pm").replace("</h3>", '</h3><p class="c-event-card__meta">Canada, 2026, 94 min</p>');
+    const reference = DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" });
+    expect(parseViffPage(withMeta, "https://viff.org/whats-on/", reference)[0]?.releaseYear).toBe(2026);
+    const withLabel = card("Sat Sep 26", "6:10 pm").replace("</h3>", '</h3><p class="c-event-card__meta">VIFF 2026</p>');
+    expect(parseViffPage(withLabel, "https://viff.org/whats-on/", reference)[0]?.releaseYear).toBeUndefined();
+  });
+
   it("flags sold out and standby instances", () => {
     const html = card("Sat Sep 26", "6:10 pm").replace("Book now", "Standby only");
     expect(parseViffPage(html, "https://viff.org/whats-on/", DateTime.fromISO("2026-09-21", { zone: "America/Vancouver" }))[0]?.status).toBe("sold_out");
@@ -153,6 +161,13 @@ describe("Hollywood Theatre", () => {
     const { showtimes, warning } = parseHollywoodEventPage(html, "https://www.hollywoodtheatre.ca/events/x");
     expect(warning).toBeUndefined();
     expect(showtimes.map((showtime) => showtime.startsAt)).toEqual(["2026-10-08T19:00:00-07:00"]);
+  });
+
+  it("takes the year from the page's slug, or from the page", () => {
+    const film = (body: string) => `<meta name="description" content="Example Film at Hollywood Theatre"><h1 class="heading-events">Example Film</h1><a href="/categories/film">Film</a>${body}`;
+    expect(parseHollywoodEventPage(film("<div>October 3, 2026</div><p>SHOW: 7:00pm</p>"), "https://www.hollywoodtheatre.ca/events/the-fly-1986").showtimes[0]?.releaseYear).toBe(1986);
+    expect(parseHollywoodEventPage(film("<div>October 3, 2026</div><p>USA, 1986, 96 min</p><p>SHOW: 7:00pm</p>"), "https://www.hollywoodtheatre.ca/events/the-fly").showtimes[0]?.releaseYear).toBe(1986);
+    expect(parseHollywoodEventPage(film("<div>October 3, 2026</div><p>SHOW: 7:00pm</p>"), "https://www.hollywoodtheatre.ca/events/the-fly").showtimes[0]?.releaseYear).toBeUndefined();
   });
 
   it("excludes non-film events", () => {

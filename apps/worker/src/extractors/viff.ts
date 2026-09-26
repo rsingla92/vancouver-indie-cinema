@@ -2,7 +2,7 @@ import { load } from "cheerio";
 import { DateTime } from "luxon";
 import { extractedShowtimeSchema, type ExtractionBatch, type ExtractedShowtime } from "../contracts.js";
 import { fetchText } from "../http.js";
-import { absoluteUrl, cleanText, iso, parseDateTime, VANCOUVER_TZ } from "./utils.js";
+import { absoluteUrl, cleanText, iso, parseDateTime, printedYear, VANCOUVER_TZ } from "./utils.js";
 
 const BASE = "https://viff.org";
 
@@ -16,6 +16,9 @@ export function parseViffPage(html: string, pageUrl = `${BASE}/whats-on/`, refer
     const detailHref = card.find(".c-event-card__title a").first().attr("href");
     if (!rawTitle || !detailHref) return;
     const detailUrl = absoluteUrl(detailHref, pageUrl);
+    const now = reference ?? DateTime.now().setZone(VANCOUVER_TZ);
+    // Everything on the card but the title: country, year and running time live there.
+    const releaseYear = printedYear(cleanText(card.clone().find(".c-event-card__title").remove().end().text()), now.year + 1);
 
     card.find(".c-event-instance").each((__, instanceElement) => {
       const instance = $(instanceElement);
@@ -24,9 +27,7 @@ export function parseViffPage(html: string, pageUrl = `${BASE}/whats-on/`, refer
       const time = cleanText(instance.find(".c-event-instance__time").text());
       if (!date || !time) return;
 
-      const startsAt = parseDateTime(`${date} ${time}`, ["ccc LLL d h:mm a", "LLL d h:mm a"], {
-        reference: reference ?? DateTime.now().setZone(VANCOUVER_TZ),
-      });
+      const startsAt = parseDateTime(`${date} ${time}`, ["ccc LLL d h:mm a", "LLL d h:mm a"], { reference: now });
       const ticketHref = instance.find("a.c-event-instance__btn[href*='/book/']").attr("href");
       const statusText = cleanText(instance.find(".c-event-instance__booking-message,.c-event-instance__btn").text()).toLowerCase();
       const status = statusText.includes("sold out") || statusText.includes("standby") ? "sold_out" : "scheduled";
@@ -40,6 +41,7 @@ export function parseViffPage(html: string, pageUrl = `${BASE}/whats-on/`, refer
         sourceUid: instanceId ?? ticketHref?.match(/\/book\/([^/?#]+)/)?.[1] ?? `${new URL(detailUrl).pathname}:${startsAt.toISO()}`,
         rawTitle,
         startsAt: iso(startsAt),
+        ...(releaseYear ? { releaseYear } : {}),
         detailUrl,
         ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
         status,

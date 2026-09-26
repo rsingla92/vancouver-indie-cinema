@@ -2,8 +2,8 @@ import { DateTime } from "luxon";
 import { z } from "zod";
 import type { DateRange, ExtractionBatch, ExtractedShowtime, VenueSlug } from "../contracts.js";
 import { extractedShowtimeSchema } from "../contracts.js";
-import { fetchJson } from "../http.js";
-import { iso, mapWithConcurrency, TORONTO_TZ } from "./utils.js";
+import { fetchJson, fetchText } from "../http.js";
+import { iso, mapWithConcurrency, TORONTO_TZ, addPrintedYears } from "./utils.js";
 
 /**
  * Cinéma Beaubien, Cinéma du Parc and Cinéma du Musée publish one schedule on
@@ -285,14 +285,13 @@ function sharedCrawlFor(range: DateRange, crawl: (range: DateRange) => Promise<S
 
 export interface CinemaCinemaOptions {
   crawl?: (range: DateRange) => Promise<SharedCrawl>;
+  /** Reads a film page; the schedule data carries no year. */
+  fetchPage?: (url: URL) => Promise<string>;
 }
 
 export async function extractCinemaCinema(venue: CinemaCinemaVenue, range: DateRange, options: CinemaCinemaOptions = {}): Promise<ExtractionBatch> {
   const crawl = await sharedCrawlFor(range, options.crawl ?? crawlCinemaCinema);
-  return {
-    venueSlug: venue.venueSlug,
-    fetchedAt: crawl.fetchedAt,
-    showtimes: crawl.showtimes.filter((showtime) => showtime.venueSlug === venue.venueSlug),
-    warnings: [...crawl.warnings],
-  };
+  const showtimes = crawl.showtimes.filter((showtime) => showtime.venueSlug === venue.venueSlug).map((showtime) => ({ ...showtime }));
+  await addPrintedYears(showtimes, options.fetchPage ?? fetchText);
+  return { venueSlug: venue.venueSlug, fetchedAt: crawl.fetchedAt, showtimes, warnings: [...crawl.warnings] };
 }

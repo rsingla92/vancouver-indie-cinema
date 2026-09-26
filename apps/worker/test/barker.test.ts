@@ -30,7 +30,7 @@ describe("extractBarker", () => {
     const batch = await extractBarker(RIO_THEATRE, { start: new Date("2026-09-23T12:00:00Z"), end: new Date("2026-10-23T12:00:00Z") }, { pageSize: 2 });
     expect(batch.showtimes.map((item) => item.sourceUid)).toEqual(["1", "2", "3", "4"]);
     expect(batch.warnings).toEqual([]);
-    expect(requested).toHaveLength(3);
+    expect(requested.filter((url) => url.pathname.endsWith("/listings"))).toHaveLength(3);
   });
 
   it("warns when the endpoint keeps returning the same full page", async () => {
@@ -52,5 +52,20 @@ describe("extractBarker", () => {
     const batch = await extractBarker(RIO_THEATRE, { start: new Date("2026-09-23T12:00:00Z"), end: new Date("2026-10-23T12:00:00Z") });
     expect(batch.showtimes).toHaveLength(1);
     expect(batch.warnings[0]).toMatch(/^page 1 listing 1:/);
+  });
+
+  it("reads each event's page for the year the venue prints", async () => {
+    servePages([[listing(1), listing(2)]]);
+    const pages: string[] = [];
+    const batch = await extractBarker(RIO_THEATRE, { start: new Date("2026-09-23T12:00:00Z"), end: new Date("2026-10-23T12:00:00Z") }, {
+      fetchPage: async (url) => {
+        pages.push(url.pathname);
+        if (url.pathname.includes("film-2")) throw new Error("offline");
+        return "<html><body><p>USA | 1990 | 113 min | Dir. Paul Verhoeven</p></body></html>";
+      },
+    });
+    expect(pages.sort()).toEqual(["/movie/film-1/", "/movie/film-2/"]);
+    expect(batch.showtimes.map((showtime) => showtime.releaseYear)).toEqual([1990, undefined]);
+    expect(batch.warnings).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
-import { inferYear, parseDateTime } from "../src/extractors/utils.js";
+import { addPrintedYears, inferYear, parseDateTime, printedYear } from "../src/extractors/utils.js";
 
 const reference = (iso: string) => DateTime.fromISO(iso, { zone: "America/Vancouver" });
 
@@ -53,5 +53,32 @@ describe("parseDateTime", () => {
   it("falls through formats and reports unparseable input", () => {
     expect(parseDateTime("Sep 26 6:10 pm", ["ccc LLL d h:mm a", "LLL d h:mm a"], { reference: reference("2026-09-21") }).day).toBe(26);
     expect(() => parseDateTime("sometime soon", ["LLL d h:mm a"])).toThrow(/Unable to parse/);
+  });
+});
+
+describe("printedYear", () => {
+  it("reads a year beside a director credit or a running time, and nothing else", () => {
+    expect(printedYear("Japan 1962. Dir: Masaki Kobayashi. 133 min.", 2027)).toBe(1962);
+    expect(printedYear("Canada, 2026, 94 min", 2027)).toBe(2026);
+    expect(printedYear("USA | 1990 | 113 min | Directed by Paul Verhoeven", 2027)).toBe(1990);
+    expect(printedYear("2001: A Space Odyssey — USA, 1968, 149 min", 2027)).toBe(1968);
+    expect(printedYear("VIFF 2026 · Sat Sep 26 · 6:10 pm", 2027)).toBeNull();
+    expect(printedYear("Coming 2031, 120 min", 2027)).toBeNull();
+  });
+
+  it("fills in years from each film's page once, silently skipping pages it cannot read", async () => {
+    const showtime = (id: string, detailUrl: string, releaseYear?: number) => ({
+      venueSlug: "rio-theatre" as const, sourceUid: id, rawTitle: "Film", startsAt: "2026-09-26T19:00:00-07:00", detailUrl, status: "scheduled" as const, tags: [], sourcePayload: {},
+      ...(releaseYear ? { releaseYear } : {}),
+    });
+    const showtimes = [showtime("1", "https://x/a"), showtime("2", "https://x/a"), showtime("3", "https://x/b", 1999), showtime("4", "https://x/c")];
+    const fetched: string[] = [];
+    await addPrintedYears(showtimes, async (url) => {
+      fetched.push(url.pathname);
+      if (url.pathname === "/c") throw new Error("boom");
+      return "<html><body><p>Japan 1962. Dir: Masaki Kobayashi.</p></body></html>";
+    }, { maxYear: 2027 });
+    expect(fetched.sort()).toEqual(["/a", "/c"]);
+    expect(showtimes.map((item) => item.releaseYear)).toEqual([1962, 1962, 1999, undefined]);
   });
 });

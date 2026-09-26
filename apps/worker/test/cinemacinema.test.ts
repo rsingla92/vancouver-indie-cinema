@@ -90,5 +90,15 @@ describe("crawlCinemaCinema", () => {
     expect(parc.showtimes.length + beaubien.showtimes.length + musee.showtimes.length).toBe(15);
     expect(parc.showtimes.every((showtime) => showtime.venueSlug === "cinema-du-parc")).toBe(true);
     expect(musee.warnings).toEqual(crawl.warnings);
+
+    const pages: string[] = [];
+    const dated = await extractCinemaCinema(CINEMA_DU_PARC, range, {
+      crawl: stub,
+      fetchPage: async (url) => { pages.push(url.pathname); return "<html><body><p>Réalisé par Jane Doe. Canada, 2024, 95 min</p></body></html>"; },
+    });
+    expect(pages.every((path) => path.startsWith("/en/films/") || path === "/en/schedule")).toBe(true);
+    expect(new Set(pages).size).toBe(pages.length);
+    expect(dated.showtimes.every((showtime) => showtime.releaseYear === 2024)).toBe(true);
+    expect(parc.showtimes.every((showtime) => showtime.releaseYear === undefined)).toBe(true);
   });
 });

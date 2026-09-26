@@ -1,4 +1,6 @@
+import { load } from "cheerio";
 import { DateTime } from "luxon";
+import type { ExtractedShowtime } from "../contracts.js";
 
 export const VANCOUVER_TZ = "America/Vancouver";
 /** Toronto and Montreal share the Eastern zone. */
@@ -97,4 +99,53 @@ export async function mapWithConcurrency<T, R>(
 
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return output;
+}
+
+/** "Japan 1962. Dir: Masaki Kobayashi.": the year closest before a director credit. */
+const YEAR_BEFORE_DIRECTOR = /\b((?:18|19|20)\d{2})\b(?:(?!\b(?:18|19|20)\d{2}\b)[\s\S]){0,60}?\bdir(?:\.|:|ector|ected|\.:)/i;
+/** "Canada, 2026, 94 min", "USA | 1990 | 113 min": a year followed by a running time, with no other number between. */
+const YEAR_BEFORE_RUNTIME = /\b((?:18|19|20)\d{2})\b[^\d]{0,40}?\b\d{1,3}\s*(?:min(?:ute)?s?|mins?)(?![a-z])/i;
+
+/**
+ * The release year a venue prints beside a film, or null. Only a year anchored to a
+ * director credit or a running time counts, so a season label such as "VIFF 2026"
+ * or a title such as "2001: A Space Odyssey" is never mistaken for one.
+ */
+export function printedYear(text: string, maxYear: number): number | null {
+  for (const pattern of [YEAR_BEFORE_DIRECTOR, YEAR_BEFORE_RUNTIME]) {
+    const year = Number(text.match(pattern)?.[1] ?? NaN);
+    if (year >= 1888 && year <= maxYear) return year;
+  }
+  return null;
+}
+
+export interface PrintedYearOptions {
+  concurrency?: number;
+  maxYear?: number;
+}
+
+/**
+ * Fetch each film's own page once and take the year it prints, for showtimes that
+ * have none. A page that cannot be read or names no year costs nothing but a
+ * possible match, so failures are silent.
+ */
+export async function addPrintedYears(
+  showtimes: ExtractedShowtime[],
+  fetchPage: (url: URL) => Promise<string>,
+  options: PrintedYearOptions = {},
+): Promise<void> {
+  const maxYear = options.maxYear ?? new Date().getFullYear() + 1;
+  const pages = [...new Set(showtimes.filter((showtime) => !showtime.releaseYear).map((showtime) => showtime.detailUrl))];
+  const years = new Map<string, number | null>();
+  await mapWithConcurrency(pages, options.concurrency ?? 2, async (url) => {
+    try {
+      years.set(url, printedYear(cleanText(load(await fetchPage(new URL(url)))("body").text()), maxYear));
+    } catch {
+      years.set(url, null);
+    }
+  });
+  for (const showtime of showtimes) {
+    const year = years.get(showtime.detailUrl);
+    if (!showtime.releaseYear && year) showtime.releaseYear = year;
+  }
 }

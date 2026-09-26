@@ -2,7 +2,7 @@ import { load, type CheerioAPI } from "cheerio";
 import type { DateTime } from "luxon";
 import { extractedShowtimeSchema, type ExtractionBatch, type ExtractedShowtime } from "../contracts.js";
 import { fetchText } from "../http.js";
-import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime } from "./utils.js";
+import { absoluteUrl, cleanText, iso, mapWithConcurrency, parseDateTime, printedYear } from "./utils.js";
 
 const BASE = "https://www.hollywoodtheatre.ca";
 
@@ -92,6 +92,9 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
   const ticketAnchor = $("a").filter((_, element) => /(?:get|buy)\s*tickets/i.test(cleanText($(element).text()))).first();
   const ticketHref = ticketAnchor.attr("href");
   const slug = new URL(pageUrl).pathname.split("/").filter(Boolean).at(-1)!;
+  const maxYear = (reference?.year ?? new Date().getFullYear()) + 1;
+  const slugYear = Number(slug.match(/-((?:19|20)\d{2})$/)?.[1] ?? NaN);
+  const releaseYear = slugYear >= 1888 && slugYear <= maxYear ? slugYear : printedYear(bodyText, maxYear);
 
   const showtimes = uniqueTimes.map((time, index) => {
     const formats = /[ap]m$/i.test(time) ? [`${date.format} h:mm a`, `${date.format} h a`] : [`${date.format} HH:mm`];
@@ -101,6 +104,7 @@ export function parseHollywoodEventPage(html: string, pageUrl: string, reference
       sourceUid: `${slug}:${index}:${startsAt.toISO()}`,
       rawTitle,
       startsAt: iso(startsAt),
+      ...(releaseYear ? { releaseYear } : {}),
       detailUrl: pageUrl,
       ...(ticketHref ? { ticketUrl: absoluteUrl(ticketHref, pageUrl) } : {}),
       tags: categories.filter((category) => category !== "film"),

@@ -85,10 +85,22 @@ describe("OmdbClient", () => {
   });
 
   it("reports a failed request rather than caching it", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 429 })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 503 })));
     const store = new Map<string, unknown>();
     const cache: LookupCache = { get: async () => undefined, set: async (provider, key, value) => { store.set(`${provider}:${key}`, value); } };
-    await expect(new OmdbClient("key", cache).lookup(title())).rejects.toThrow("OMDb request failed (429)");
+    const client = new OmdbClient("key", cache);
+    await expect(client.lookup(title())).rejects.toThrow("OMDb request failed (503)");
     expect(store.size).toBe(0);
+    expect(client.enabled).toBe(true);
+  });
+
+  it("stops asking for the rest of the run once the key or the day's allowance is refused", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ Response: "False", Error: "Request limit reached!" }), { status: 401 }));
+    vi.stubGlobal("fetch", fetch);
+    const client = new OmdbClient("key");
+    await expect(client.lookup(title())).rejects.toThrow("OMDb request failed (401: Request limit reached!)");
+    expect(client.enabled).toBe(false);
+    await expect(client.lookup(title({ coreTitle: "Tony", releaseYear: null }))).rejects.toThrow("OMDb request failed (401: Request limit reached!)");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

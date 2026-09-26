@@ -39,10 +39,13 @@ function toFilm(entry: OmdbTitle): OmdbFilm {
  * no scoring: the title must be exact, and the year must agree when the venue gave one.
  */
 export class OmdbClient {
+  /** Set once OMDb rejects the key or the day's allowance, so the run stops asking. */
+  private stopped: string | null = null;
+
   constructor(private readonly apiKey = process.env.OMDB_API_KEY, private readonly cache?: LookupCache) {}
 
   get enabled(): boolean {
-    return Boolean(this.apiKey);
+    return Boolean(this.apiKey) && this.stopped === null;
   }
 
   async lookup(input: NormalizedTitle): Promise<OmdbFilm | null> {
@@ -71,9 +74,24 @@ export class OmdbClient {
   }
 
   private async request<T>(params: Record<string, string>): Promise<T> {
+    if (this.stopped) throw new Error(this.stopped);
     const query = new URLSearchParams({ ...params, apikey: this.apiKey! });
     const response = await fetch(`${OMDB_BASE_URL}?${query}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(OMDB_TIMEOUT_MS) });
-    if (!response.ok) throw new Error(`OMDb request failed (${response.status})`);
+    if (!response.ok) {
+      // 401 is both "invalid key" and "request limit reached": neither changes within a run.
+      const reason = `OMDb request failed (${response.status}${await this.errorText(response)})`;
+      if (response.status === 401) this.stopped = reason;
+      throw new Error(reason);
+    }
     return await response.json() as T;
+  }
+
+  private async errorText(response: Response): Promise<string> {
+    try {
+      const body = await response.json() as { Error?: string };
+      return body.Error ? `: ${body.Error}` : "";
+    } catch {
+      return "";
+    }
   }
 }

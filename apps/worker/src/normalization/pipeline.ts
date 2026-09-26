@@ -98,12 +98,17 @@ export async function processShowtime(
   let details: { imageUrl?: string; synopsis?: string } | undefined;
   const nothingClose = ranked.length === 0 || ranked[0]!.score < MATCH_THRESHOLD;
   if (!candidate && eligible && nothingClose && dependencies.omdb?.enabled) {
-    const film = await dependencies.omdb.lookup(normalized);
-    if (film) {
-      details = { ...(film.posterUrl ? { imageUrl: film.posterUrl } : {}), ...(film.plot ? { synopsis: film.plot } : {}) };
-      refusal = `${refusal}; OMDb has "${film.title}" (${film.year ?? "no date"}, ${film.imdbId})`;
-    } else {
-      refusal = `${refusal}; OMDb has nothing`;
+    try {
+      const film = await dependencies.omdb.lookup(normalized);
+      if (film) {
+        details = { ...(film.posterUrl ? { imageUrl: film.posterUrl } : {}), ...(film.plot ? { synopsis: film.plot } : {}) };
+        refusal = `${refusal}; OMDb has "${film.title}" (${film.year ?? "no date"}, ${film.imdbId})`;
+      } else {
+        refusal = `${refusal}; OMDb has nothing`;
+      }
+    } catch (error) {
+      // A second opinion that fails must not cost the listing itself.
+      refusal = `${refusal}; OMDb lookup failed: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 

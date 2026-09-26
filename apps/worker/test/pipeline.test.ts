@@ -120,6 +120,13 @@ describe("processShowtime", () => {
     expect(disabled.merge).toHaveBeenCalledWith(expect.objectContaining({ refusal: "refused: TMDB returned no candidates" }));
   });
 
+  it("lists the screening anyway when the OMDb lookup fails", async () => {
+    const { deps, merge } = dependencies(normalized(), []);
+    await processShowtime(item, { ...deps, omdb: { enabled: true, lookup: vi.fn(async () => { throw new Error("OMDb request failed (401: Invalid API key!)"); }) } });
+    expect(merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: null, refusal: "refused: TMDB returned no candidates; OMDb lookup failed: OMDb request failed (401: Invalid API key!)" }));
+    expect(merge.mock.calls[0]?.[0]).not.toHaveProperty("details");
+  });
+
   it("skips TMDB for non-film and low-confidence titles", async () => {
     for (const result of [normalized({ contentKind: "non_film" }), normalized({ confidence: 0.45 })]) {
       const { deps, search, merge } = dependencies(result, [tmdbMovie]);

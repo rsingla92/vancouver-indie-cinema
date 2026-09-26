@@ -125,4 +125,16 @@ suite("CinemaRepository against Postgres", () => {
     expect(skipped).toEqual({ status: "review", showtimeId: null });
     expect((await sql`select 1 from showtimes where source_uid = 'int-3'`).length).toBe(0);
   });
+
+  it("reads a venue's programme and its pinned titles", async () => {
+    expect(await repository.findTheatre("rio-theatre")).toMatchObject({ id: theatreId, region: "BC", programme: null });
+    await sql`insert into title_overrides (theatre_slug, title, tmdb_id, note) values ('*', 'Suspiria', 1, 'everywhere'), ('rio-theatre', 'SUSPIRIA', 2, 'the Rio')
+      on conflict (theatre_slug, title) do update set tmdb_id = excluded.tmdb_id`;
+    try {
+      expect(await repository.loadOverrides("rio-theatre")).toEqual(new Map([["suspiria", 2]]));
+      expect(await repository.loadOverrides("park-theatre")).toEqual(new Map([["suspiria", 1]]));
+    } finally {
+      await sql`delete from title_overrides where title in ('Suspiria', 'SUSPIRIA')`;
+    }
+  });
 });

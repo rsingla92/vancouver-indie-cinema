@@ -41,6 +41,15 @@ describe("processShowtime", () => {
     expect(merge.mock.calls[0]?.[0]).not.toHaveProperty("refusal");
   });
 
+  it("links a pinned title without searching", async () => {
+    const { deps, search, merge } = dependencies(normalized({ coreTitle: "Suspiria" }), []);
+    const movie = vi.fn(async (id: number) => ({ ...tmdbMovie, id, title: "Suspiria" }));
+    await processShowtime({ ...item, rawTitle: "SUSPIRIA (4K)" }, { ...deps, tmdb: { search, movie } }, { overrides: new Map([["suspiria", 11906]]) });
+    expect(search).not.toHaveBeenCalled();
+    expect(movie).toHaveBeenCalledWith(11906);
+    expect(merge).toHaveBeenCalledWith(expect.objectContaining({ candidate: expect.objectContaining({ movie: expect.objectContaining({ id: 11906 }), reason: "pinned to TMDB 11906 by title_overrides" }) }));
+  });
+
   it("passes the venue's search languages to TMDB", async () => {
     const { deps, search } = dependencies(normalized(), [tmdbMovie]);
     await processShowtime(item, deps, { languages: ["en-CA", "fr-CA"] });

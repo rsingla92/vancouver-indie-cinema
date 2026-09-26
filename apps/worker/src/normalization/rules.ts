@@ -4,7 +4,7 @@ import type { NormalizedTitle } from "./contracts.js";
  * Pattern tables for the deterministic title normalizer. Bump the version whenever a
  * rule changes so replayed raw items can be told apart from earlier runs.
  */
-export const NORMALIZATION_RULES_VERSION = "title-rules-v7";
+export const NORMALIZATION_RULES_VERSION = "title-rules-v8";
 
 export type Tag = NormalizedTitle["tags"][number];
 

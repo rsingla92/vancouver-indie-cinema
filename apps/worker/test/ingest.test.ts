@@ -11,7 +11,8 @@ const batch = (showtimes: ExtractedShowtime[], warnings: string[] = []): Extract
 
 function harness(mergeImpl?: (input: MergeInput) => Promise<{ status: "matched"; movieId: string; showtimeId: string } | { status: "review", showtimeId: null }>) {
   const repository = {
-    findTheatre: vi.fn(async (slug: string) => (slug === "rio-theatre" ? { id: "theatre-1", region: "BC" } : null)),
+    findTheatre: vi.fn(async (slug: string) => (slug === "rio-theatre" ? { id: "theatre-1", region: "BC", programme: null } : null)),
+    loadOverrides: vi.fn(async () => new Map<string, number>()),
     startRun: vi.fn(async () => "run-1"),
     finishRun: vi.fn(async () => undefined),
     deactivateUnseenShowtimes: vi.fn(async () => ({ deactivated: 2, unseen: 2, active: 6, skipped: false })),

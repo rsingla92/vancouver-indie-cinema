@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import type { ExtractedShowtime } from "../contracts.js";
 import type { NormalizedTitle, RankedCandidate, TmdbMovie } from "./contracts.js";
+import { canonicalTitle } from "./text.js";
 
 export interface MergeInput {
   item: ExtractedShowtime;
@@ -164,9 +165,21 @@ export class CinemaRepository {
     this.sql = postgres(databaseUrl, { max: 4, prepare: false });
   }
 
-  async findTheatre(slug: string): Promise<{ id: string; region: string } | null> {
-    const rows = await this.sql<{ id: string; region: string }[]>`select id, region from theatres where slug = ${slug}`;
+  async findTheatre(slug: string): Promise<{ id: string; region: string; programme: string | null } | null> {
+    const rows = await this.sql<{ id: string; region: string; programme: string | null }[]>`
+      select id, region, source_config->>'programme' as programme from theatres where slug = ${slug}`;
     return rows[0] ?? null;
+  }
+
+  /** Pinned films for a venue, keyed by the title as the matcher compares it. Venue pins win over '*' pins. */
+  async loadOverrides(slug: string): Promise<Map<string, number>> {
+    const rows = await this.sql<{ theatre_slug: string; title: string; tmdb_id: string }[]>`
+      select theatre_slug, title, tmdb_id::text from title_overrides where theatre_slug in ('*', ${slug})`;
+    const pins = new Map<string, number>();
+    for (const row of rows.sort((a, b) => (a.theatre_slug === "*" ? -1 : 0) - (b.theatre_slug === "*" ? -1 : 0))) {
+      pins.set(canonicalTitle(row.title), Number(row.tmdb_id));
+    }
+    return pins;
   }
 
   async findTheatreId(slug: string): Promise<string | null> {

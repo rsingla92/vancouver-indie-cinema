@@ -156,6 +156,12 @@ describe("listings seen on the venues' sites", () => {
     expect(core("Romeo + Juliet")).toBe("Romeo + Juliet");
   });
 
+  it("drops part numbering and offers the series name", () => {
+    expect(normalizer.normalize("LA BATAILLE DE GAULLE: LIBERTÉ (PARTIE 2)")).toMatchObject({ coreTitle: "LA BATAILLE DE GAULLE: LIBERTÉ", alternateTitles: ["LA BATAILLE DE GAULLE"] });
+    expect(core("Kill Bill: Vol. 1")).toBe("Kill Bill: Vol. 1");
+    expect(core("Nymphomaniac (Part II)")).toBe("Nymphomaniac");
+  });
+
   it("keeps typography TMDB uses", () => {
     expect(core("8½")).toBe("8½");
     expect(core("Doppelgängers³")).toBe("Doppelgängers³");
@@ -229,6 +235,18 @@ describe("TMDB matching", () => {
     const vincent: NormalizedTitle = { ...input, coreTitle: "VINCENT ET LA PROPHÉTIE DES MERS", releaseYear: null, tags: [] };
     const whale = { ...movie(1, "The Last Whale Singer", "2026", 5), localizedTitles: ["Vincent et la prophétie des mers"] };
     expect(confidentMatch(rankCandidates(vincent, [whale]))?.movie.id).toBe(1);
+  });
+
+  it("prefers the current release of a same-title pair only where the venue asks", () => {
+    const fatherland: NormalizedTitle = { ...input, coreTitle: "Fatherland", releaseYear: null, tags: [] };
+    const now = new Date("2026-09-26T00:00:00Z");
+    const pair = [movie(1, "Fatherland", "2026", 4), movie(2, "Fatherland", "1994", 5)];
+    expect(confidentMatch(rankCandidates(fatherland, pair))).toBeNull();
+    expect(confidentMatch(rankCandidates(fatherland, pair), { preferRecent: true, now })?.movie.id).toBe(1);
+    const both = [movie(1, "Fatherland", "2026", 4), movie(2, "Fatherland", "2026", 5)];
+    expect(confidentMatch(rankCandidates(fatherland, both), { preferRecent: true, now })).toBeNull();
+    const neither = [movie(1, "Day of Wrath", "1943", 9), movie(2, "Day of Wrath", "2006", 8)];
+    expect(confidentMatch(rankCandidates({ ...fatherland, coreTitle: "Day of Wrath" }, neither), { preferRecent: true, now })).toBeNull();
   });
 
   it("explains a refusal", () => {

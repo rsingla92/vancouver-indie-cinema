@@ -10,7 +10,7 @@ export const DEFAULT_HORIZON_DAYS = 60;
 const MAX_HORIZON_DAYS = 120;
 const DAY_MS = 86_400_000;
 
-export type IngestRepository = Pick<CinemaRepository, "merge" | "findTheatre" | "startRun" | "finishRun" | "deactivateUnseenShowtimes">;
+export type IngestRepository = Pick<CinemaRepository, "merge" | "findTheatre" | "loadOverrides" | "startRun" | "finishRun" | "deactivateUnseenShowtimes">;
 
 /** Quebec venues print French titles, which TMDB only returns in French. */
 export const searchLanguagesFor = (region: string): readonly string[] => (region === "QC" ? ["en-CA", "fr-CA"] : ["en-CA"]);
@@ -59,6 +59,8 @@ export async function ingestVenue(venueSlug: VenueSlug, dependencies: IngestDepe
   }
   const theatreId = theatre.id;
   const languages = searchLanguagesFor(theatre.region);
+  const preferRecent = theatre.programme === "first_run" || theatre.programme === "festival";
+  const overrides = await dependencies.repository.loadOverrides(venueSlug);
 
   const runId = await dependencies.repository.startRun(theatreId);
   report.runId = runId;
@@ -78,7 +80,7 @@ export async function ingestVenue(venueSlug: VenueSlug, dependencies: IngestDepe
 
     for (const item of batch.showtimes) {
       try {
-        const result = await processShowtime(item, dependencies, { ingestionRunId: runId, languages });
+        const result = await processShowtime(item, dependencies, { ingestionRunId: runId, languages, preferRecent, overrides });
         if (result.status === "matched") report.matched += 1;
         else report.review += 1;
       } catch (error) {

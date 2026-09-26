@@ -3,6 +3,7 @@ import type { ExtractedShowtime } from "../contracts.js";
 import type { TitleNormalizer } from "./contracts.js";
 import { DeterministicTitleNormalizer, NORMALIZATION_RULES_VERSION, titleAfterSeriesLabel } from "./normalizer.js";
 import { CinemaRepository, type MergeResult } from "./repository.js";
+import { canonicalTitle } from "./text.js";
 import { confidentMatch, explainRefusal, rankCandidates, TmdbClient } from "./tmdb.js";
 
 /** Normalizations below this confidence are never auto-matched against TMDB. */
@@ -10,7 +11,7 @@ export const MIN_NORMALIZATION_CONFIDENCE = 0.7;
 
 export interface PipelineDependencies {
   normalizer: TitleNormalizer;
-  tmdb: Pick<TmdbClient, "search">;
+  tmdb: Pick<TmdbClient, "search"> & Partial<Pick<TmdbClient, "movie">>;
   repository: Pick<CinemaRepository, "merge">;
   rulesVersion: string;
 }
@@ -19,6 +20,10 @@ export interface ProcessContext {
   ingestionRunId?: string;
   /** TMDB languages to search in; Quebec venues add fr-CA so French titles compare against French titles. */
   languages?: readonly string[];
+  /** The venue is a first-run house or a festival: prefer the current release of a same-title pair. */
+  preferRecent?: boolean;
+  /** Films pinned by title for this venue (title_overrides), keyed by canonical title. */
+  overrides?: ReadonlyMap<string, number>;
 }
 
 function stableStringify(value: unknown): string {
@@ -53,15 +58,31 @@ export async function processShowtime(
   // A year printed in the title wins; otherwise one the venue states elsewhere on the page.
   let normalized = { ...fromTitle, releaseYear: fromTitle.releaseYear ?? item.releaseYear ?? null };
   const eligible = normalized.contentKind === "film" && normalized.confidence >= MIN_NORMALIZATION_CONFIDENCE;
+  const match = { preferRecent: context.preferRecent ?? false };
+
+  // A pinned title needs no search: the film was chosen by hand.
+  const pinnedId = context.overrides?.get(canonicalTitle(normalized.coreTitle)) ?? context.overrides?.get(canonicalTitle(item.rawTitle));
+  if (pinnedId && dependencies.tmdb.movie) {
+    const movie = await dependencies.tmdb.movie(pinnedId);
+    return dependencies.repository.merge({
+      item,
+      normalized,
+      candidate: { movie, score: 1, similarity: 1, reason: `pinned to TMDB ${pinnedId} by title_overrides` },
+      payloadHash: stablePayloadHash(item),
+      rulesVersion: dependencies.rulesVersion,
+      ...(context.ingestionRunId ? { ingestionRunId: context.ingestionRunId } : {}),
+    });
+  }
+
   let ranked = eligible ? rankCandidates(normalized, await dependencies.tmdb.search(normalized, context.languages)) : [];
-  let candidate = eligible ? confidentMatch(ranked) : null;
+  let candidate = eligible ? confidentMatch(ranked, match) : null;
 
   // "Klassic Kidz: ParaNorman" finds nothing as a whole; the part after the series label may.
   const afterLabel = eligible && !candidate ? titleAfterSeriesLabel(normalized.coreTitle) : null;
   if (afterLabel) {
     const retried = { ...normalized, coreTitle: afterLabel, note: `${normalized.note}; series label dropped after the full title found no match` };
     const rankedAgain = rankCandidates(retried, await dependencies.tmdb.search(retried, context.languages));
-    const found = confidentMatch(rankedAgain);
+    const found = confidentMatch(rankedAgain, match);
     if (found) {
       normalized = retried;
       ranked = rankedAgain;

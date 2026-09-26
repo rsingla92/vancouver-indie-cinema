@@ -94,6 +94,8 @@ function firstOfDoubleBill(value: string): string {
 
 const ALTERNATE_BRACKET = /\s*[(\[]([^)\]]{3,60})[)\]]/g;
 const NOT_A_TITLE = /^\s*(?:part|partie|episodes?|season|vol\.?|volume)\b|^[\d\s.:-]+$/i;
+/** "(Partie 2)", "(Part II)": numbering TMDB writes into the title differently, if at all. */
+const PART_BRACKET = /\s*[(\[]\s*(?:part|partie|vol\.?|volume)\s+(?:\d+|[ivx]+)\s*[)\]]/gi;
 /** "Ken Russell's The Devils", "Warren Miller's DAYS OFF": a two- or three-word name in the possessive before the title. */
 const DIRECTOR_CREDIT = /^((?:[A-Z][\w.'’-]+\s+){1,2}[A-Z][\w.-]+)['’][sS]\s+(.{3,})$/;
 
@@ -105,7 +107,9 @@ const DIRECTOR_CREDIT = /^((?:[A-Z][\w.'’-]+\s+){1,2}[A-Z][\w.-]+)['’][sS]\s
  */
 function extractAlternates(value: string): { rest: string; alternates: string[] } {
   const alternates: string[] = [];
-  const rest = value.replace(ALTERNATE_BRACKET, (match, inner: string, offset: number) => {
+  const numbered = PART_BRACKET.test(value);
+  PART_BRACKET.lastIndex = 0;
+  const rest = value.replace(PART_BRACKET, " ").replace(ALTERNATE_BRACKET, (match, inner: string, offset: number) => {
     const text = inner.trim();
     if (offset === 0 || !/[a-z]/i.test(text) || NOT_A_TITLE.test(text) || isPromotionalSegment(text)) return match;
     alternates.push(text);
@@ -113,6 +117,9 @@ function extractAlternates(value: string): { rest: string; alternates: string[] 
   });
   const credit = tidy(rest).match(DIRECTOR_CREDIT);
   if (credit) alternates.push(credit[2]!);
+  // A numbered part is often listed under the series name alone: "La Bataille de Gaulle".
+  const series = numbered ? tidy(rest).split(/\s*:\s*/)[0] : undefined;
+  if (series && series !== tidy(rest)) alternates.push(series);
   return { rest, alternates };
 }
 

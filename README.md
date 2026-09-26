@@ -37,6 +37,16 @@ Set `DATABASE_URL` and `TMDB_API_TOKEN`. Without `DATABASE_URL`, the UI uses lab
 
 `npm run migrate` applies the SQL migrations in `db/migrations/` that have not been applied yet, in order, and records them in `schema_migrations`. The ingest workflow runs it before every ingest, so a new migration on `main` reaches the database on the next run.
 
+## Matching
+
+A screening is linked to a TMDB film only when one candidate clearly wins; otherwise it is listed under the venue's own title. Three things settle ties:
+
+- A year the venue prints beside the title, on the listing or on the film's own page.
+- The venue's programme, set in `theatres.source_config` as `{"programme": "first_run"}` or `"festival"`: there, of two same-title films, the current release wins. Repertory and mixed venues get no preference.
+- A pin in `title_overrides` for a title no rule will settle: `insert into title_overrides (theatre_slug, title, tmdb_id, note) values ('cinema-du-parc', 'Suspiria', 11906, '1977, Argento');`. Write the title as the venue prints it; `'*'` as the venue applies everywhere. The TMDB id is the number in the film's themoviedb.org URL.
+
+The review queue that shows what to pin: `select venue, normalized_title, match_reason from raw_source_items ...` (see `docs/architecture.md`).
+
 ## Cities
 
 Every theatre carries a `city` and an IANA `timezone`, the JSON files include both, and the site shows a city picker in the dateline as soon as the data holds more than one city. Times are always shown in the theatre's own zone. Adding a city means seeding its theatres (a migration like `006_seed_toronto_montreal_theatres.sql`) and writing one extractor per venue under `apps/worker/src/extractors/`, then adding the venue slug to `venueSlugSchema`; nothing in the web app changes. Other cities are tracked in issue #5.
